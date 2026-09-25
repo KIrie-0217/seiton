@@ -60,10 +60,18 @@ export const ShowIcon = () => (
   </Svg>
 );
 
-/** Drag handle. */
-export const GripIcon = () => (
+/** Square: stop. */
+export const StopIcon = () => (
   <Svg>
-    <path d="M6 4h.01M10 4h.01M6 8h.01M10 8h.01M6 12h.01M10 12h.01" strokeWidth="2.5" />
+    <rect x="4" y="4" width="8" height="8" rx="1" />
+  </Svg>
+);
+
+/** Arrow into a tray: import. */
+export const ImportIcon = () => (
+  <Svg>
+    <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5" />
+    <path d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" />
   </Svg>
 );
 

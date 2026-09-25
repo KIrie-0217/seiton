@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AssetView } from "../api";
+import { importQueryKeys } from "../importing/queries";
 import { queryKeys } from "../library/queries";
 import type { Bus, SharedState } from "./bus";
 import { MAIN_WINDOW_ID, type WindowHost } from "./host";
@@ -63,9 +64,14 @@ export function WorkspaceProvider({ host, bus, children }: WorkspaceProviderProp
         case "assetsUpdated":
           applyAssets(client, msg.assets);
           break;
+        case "importSettingsUpdated":
+          client.setQueryData(importQueryKeys.settings, msg.settings);
+          break;
+        case "importProgress":
+          client.setQueryData(importQueryKeys.status, msg.progress);
+          break;
         case "dock":
-        case "paneDragStart":
-        case "paneDragEnd":
+        case "dockHover":
           break; // handled by the main layout
       }
     });

@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PANE_MIME } from "../library/Library";
-import { createTestDesktop } from "../test/desktop";
+import { createTestDesktop, MAIN_RECT } from "../test/desktop";
 import { SplitView } from "./SplitView";
 import { createMemoryHub, type BusMessage } from "./bus";
+import { createDockTracker, DOCK_SETTLE_MS, isOverMain, type Rect } from "./docking";
 import { paneFromLocation } from "./host";
 
 const originals = {
@@ -23,7 +23,7 @@ afterAll(() => {
   }
 });
 
-type Title = "Thumbnails" | "Preview";
+type Title = "Thumbnails" | "Preview" | "Import Settings";
 
 function cell(root: HTMLElement, name: string) {
   const grid = within(root).getByRole("grid", { name: "写真と動画" });
@@ -42,21 +42,15 @@ function windowsList(root: HTMLElement) {
   return within(root).getByRole("list", { name: "Windows" });
 }
 
-/** A minimal DataTransfer for jsdom drag events. */
-function dataTransfer(withData: boolean) {
-  const store = new Map<string, string>();
-  return {
-    types: [] as string[],
-    dropEffect: "none",
-    effectAllowed: "all",
-    setData(type: string, value: string) {
-      if (!withData) return;
-      store.set(type, value);
-      this.types.push(type);
-    },
-    getData: (type: string) => store.get(type) ?? "",
-  };
+function paneOrder(root: HTMLElement) {
+  return within(root)
+    .getAllByRole("region")
+    .map((r) => r.getAttribute("aria-labelledby"));
 }
+
+// Window rectangles in screen coordinates (main window: MAIN_RECT).
+const BESIDE_MAIN: Rect = { x: MAIN_RECT.x + MAIN_RECT.width + 16, y: 100, width: 900, height: 700 };
+const OVER_MAIN: Rect = { x: 300, y: 200, width: 900, height: 700 };
 
 async function setup() {
   const user = userEvent.setup();
@@ -77,6 +71,7 @@ describe("SplitView", () => {
     const { unmount } = render(<SplitView first={<p>A</p>} second={<p>B</p>} defaultRatio={50} />);
     const sep = screen.getByRole("separator", { name: "パネルの境界" });
     expect(sep).toHaveAttribute("aria-valuenow", "50");
+    expect(sep).toHaveAttribute("aria-orientation", "vertical");
 
     sep.focus();
     await user.keyboard("{ArrowRight}{ArrowRight}");
@@ -92,11 +87,24 @@ describe("SplitView", () => {
     render(<SplitView first={<p>A</p>} second={<p>B</p>} defaultRatio={50} />);
     expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "20");
   });
+
+  it("stacks panes vertically with up/down keys", async () => {
+    const user = userEvent.setup();
+    render(<SplitView direction="column" storageKey="t" first={<p>A</p>} second={<p>B</p>} defaultRatio={50} />);
+    const sep = screen.getByRole("separator");
+    expect(sep).toHaveAttribute("aria-orientation", "horizontal");
+    sep.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(sep).toHaveAttribute("aria-valuenow", "55");
+    await user.keyboard("{ArrowLeft}");
+    expect(sep).toHaveAttribute("aria-valuenow", "55");
+  });
 });
 
 describe("paneFromLocation", () => {
   it("reads the pane kind from the query string", () => {
     expect(paneFromLocation("?pane=preview")).toBe("preview");
+    expect(paneFromLocation("?pane=import")).toBe("import");
     expect(paneFromLocation("?pane=thumbnails&x=1")).toBe("thumbnails");
     expect(paneFromLocation("?pane=evil")).toBeNull();
     expect(paneFromLocation("")).toBeNull();
@@ -121,24 +129,74 @@ describe("memory bus", () => {
   });
 });
 
+describe("dock tracker", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("treats the title bar over (or just outside) the main window as near", () => {
+    expect(isOverMain(OVER_MAIN, MAIN_RECT)).toBe(true);
+    expect(isOverMain(BESIDE_MAIN, MAIN_RECT)).toBe(false);
+    // Title bar just above the main window, within the margin.
+    expect(isOverMain({ x: 200, y: MAIN_RECT.y - 40, width: 600, height: 400 }, MAIN_RECT)).toBe(true);
+  });
+
+  it("docks after the window rests over the main window, once armed", () => {
+    vi.useFakeTimers();
+    const events: string[] = [];
+    const t = createDockTracker({ onHover: (h) => events.push(h ? "hover" : "leave"), onDock: () => events.push("dock") });
+
+    // Opened on top of the main window: ignored until moved away once.
+    t.update(OVER_MAIN, MAIN_RECT);
+    vi.advanceTimersByTime(DOCK_SETTLE_MS * 2);
+    expect(events).toEqual([]);
+
+    t.update(BESIDE_MAIN, MAIN_RECT);
+    t.update(OVER_MAIN, MAIN_RECT);
+    vi.advanceTimersByTime(DOCK_SETTLE_MS - 1);
+    t.update({ ...OVER_MAIN, x: OVER_MAIN.x + 5 }, MAIN_RECT); // still moving
+    vi.advanceTimersByTime(DOCK_SETTLE_MS - 1);
+    expect(events).toEqual(["hover"]);
+    vi.advanceTimersByTime(1);
+    expect(events).toEqual(["hover", "dock"]);
+  });
+
+  it("cancels when the window leaves again", () => {
+    vi.useFakeTimers();
+    const events: string[] = [];
+    const t = createDockTracker({ onHover: (h) => events.push(h ? "hover" : "leave"), onDock: () => events.push("dock") });
+    t.update(BESIDE_MAIN, MAIN_RECT);
+    t.update(OVER_MAIN, MAIN_RECT);
+    t.update(BESIDE_MAIN, MAIN_RECT);
+    vi.advanceTimersByTime(DOCK_SETTLE_MS * 2);
+    expect(events).toEqual(["hover", "leave"]);
+  });
+});
+
 describe("multiple windows", () => {
-  it("uses English names and icon buttons, split in the main window", async () => {
+  it("lays out Thumbnails left and Preview over Import Settings on the right", async () => {
     const { main } = await setup();
     expect(within(main).getByRole("heading", { name: "Devices" })).toBeInTheDocument();
     expect(within(main).getByRole("heading", { name: "Windows" })).toBeInTheDocument();
-    expect(pane(main, "Thumbnails")).toBeInTheDocument();
-    expect(pane(main, "Preview")).toBeInTheDocument();
-    expect(within(main).getByRole("separator")).toBeInTheDocument();
+    expect(paneOrder(main)).toEqual(["pane-thumbnails-heading", "pane-preview-heading", "pane-import-heading"]);
+    expect(within(main).getByRole("separator", { name: "Thumbnails と右パネルの境界" })).toHaveAttribute(
+      "aria-orientation",
+      "vertical",
+    );
+    expect(within(main).getByRole("separator", { name: "Preview と Import Settings の境界" })).toHaveAttribute(
+      "aria-orientation",
+      "horizontal",
+    );
 
     const popOutButton = within(pane(main, "Preview")).getByRole("button", { name: "Preview を別ウィンドウで開く" });
     expect(popOutButton.querySelector("svg")).not.toBeNull();
     expect(popOutButton).toHaveTextContent("");
-    expect(within(pane(main, "Preview")).getByRole("button", { name: "Preview を閉じる" })).toHaveAttribute(
-      "title",
-      "Preview を閉じる",
-    );
-    // There is no way to open duplicate windows.
     expect(within(main).queryByRole("button", { name: /新しい/ })).not.toBeInTheDocument();
+  });
+
+  it("gives Import Settings the whole right side when Preview is elsewhere", async () => {
+    const { user, main } = await setup();
+    await popOut(user, main, "Preview");
+    expect(paneOrder(main)).toEqual(["pane-thumbnails-heading", "pane-import-heading"]);
+    expect(within(main).getAllByRole("separator")).toHaveLength(1);
   });
 
   it("pops the preview out, syncs both ways, and docks it back by button", async () => {
@@ -147,9 +205,6 @@ describe("multiple windows", () => {
 
     const previewWin = desktop.window("preview")!;
     expect(within(windowsList(main)).getByText("別ウィンドウ")).toBeInTheDocument();
-    expect(within(main).queryByRole("separator")).not.toBeInTheDocument();
-    // The last docked pane cannot be moved out.
-    expect(within(pane(main, "Thumbnails")).getByRole("button", { name: /別ウィンドウで開く/ })).toBeDisabled();
 
     const pw = previewWin.view.container;
     await user.click(cell(main, assets[2]!.name));
@@ -162,21 +217,46 @@ describe("multiple windows", () => {
 
     await user.click(within(pw).getByRole("button", { name: "Preview をメインウィンドウに戻す" }));
     await waitFor(() => expect(previewWin.closed).toBe(true));
+    await waitFor(() =>
+      expect(paneOrder(main)).toEqual(["pane-thumbnails-heading", "pane-preview-heading", "pane-import-heading"]),
+    );
+  });
+
+  it("docks a pane window when the window is dragged over the main window", async () => {
+    const { user, desktop, main } = await setup();
+    await popOut(user, main, "Preview");
+    const previewWin = desktop.window("preview")!;
+
+    // The user drags the window by its title bar: first away, then over main.
+    desktop.moveWindow("preview", BESIDE_MAIN);
+    desktop.moveWindow("preview", OVER_MAIN);
+    expect(await within(main).findByText("離すと Preview をメインウィンドウに戻します")).toBeInTheDocument();
+
+    await waitFor(() => expect(previewWin.closed).toBe(true), { timeout: DOCK_SETTLE_MS + 1000 });
     expect(await within(main).findByRole("region", { name: "Preview" })).toBeInTheDocument();
-    expect(within(main).getByRole("separator")).toBeInTheDocument();
+    expect(within(main).queryByText(/離すと/)).not.toBeInTheDocument();
+  });
+
+  it("does not dock a window that is only placed next to the main window", async () => {
+    const { user, desktop, main } = await setup();
+    await popOut(user, main, "Import Settings");
+    desktop.moveWindow("import", BESIDE_MAIN);
+    desktop.moveWindow("import", { ...BESIDE_MAIN, y: 300 });
+    await new Promise((r) => setTimeout(r, DOCK_SETTLE_MS + 100));
+    expect(desktop.window("import")).toBeDefined();
+    expect(queryPane(main, "Import Settings")).not.toBeInTheDocument();
   });
 
   it("keeps a single window per pane and docks it when that window is closed", async () => {
     const { user, desktop, main } = await setup();
     await popOut(user, main, "Thumbnails");
-    const list = windowsList(main);
-    await user.click(within(list).getByRole("button", { name: "Thumbnails を前面に表示" }));
+    await user.click(within(windowsList(main)).getByRole("button", { name: "Thumbnails を前面に表示" }));
     expect(desktop.focusCount()).toBe(1);
     expect(desktop.openWindows().filter((w) => w.pane === "thumbnails")).toHaveLength(1);
 
     desktop.window("thumbnails")!.close();
     expect(await within(main).findByRole("region", { name: "Thumbnails" })).toBeInTheDocument();
-    expect(within(windowsList(main)).getAllByText("メインウィンドウ")).toHaveLength(2);
+    expect(within(windowsList(main)).getAllByText("メインウィンドウ")).toHaveLength(3);
   });
 
   it("hides a docked pane and shows it again from the Windows list", async () => {
@@ -186,63 +266,7 @@ describe("multiple windows", () => {
     expect(within(windowsList(main)).getByText("非表示")).toBeInTheDocument();
 
     await user.click(within(windowsList(main)).getByRole("button", { name: "Preview を表示" }));
-    expect(pane(main, "Preview")).toBeInTheDocument();
-  });
-
-  it("docks a pane window by dragging its header onto the main window", async () => {
-    const { user, desktop, main } = await setup();
-    await popOut(user, main, "Preview");
-    const pw = desktop.window("preview")!.view.container;
-    const header = within(pw).getByRole("heading", { name: "Preview" }).closest("header")!;
-    expect(header).toHaveAttribute("draggable", "true");
-
-    const dt = dataTransfer(true);
-    fireEvent.dragStart(header, { dataTransfer: dt });
-    expect(dt.getData(PANE_MIME)).toBe("preview");
-    // The main window shows drop zones once the pane window starts dragging.
-    const left = await within(main).findByRole("region", { name: "左側に結合" });
-    fireEvent.dragOver(left, { dataTransfer: dt });
-    fireEvent.drop(left, { dataTransfer: dt });
-    fireEvent.dragEnd(header, { dataTransfer: dt });
-
-    await waitFor(() => expect(desktop.window("preview")).toBeUndefined());
-    // Dropped on the left: Preview comes first.
-    const regions = within(main)
-      .getAllByRole("region")
-      .map((r) => r.getAttribute("aria-labelledby"));
-    expect(regions).toEqual(["pane-preview-heading", "pane-thumbnails-heading"]);
-    expect(within(main).queryByRole("region", { name: "左側に結合" })).not.toBeInTheDocument();
-  });
-
-  it("docks by drop even when drag data does not cross windows", async () => {
-    const { user, desktop, main } = await setup();
-    await popOut(user, main, "Thumbnails");
-    const tw = desktop.window("thumbnails")!.view.container;
-    const header = within(tw).getByRole("heading", { name: "Thumbnails" }).closest("header")!;
-
-    const empty = dataTransfer(false);
-    fireEvent.dragStart(header, { dataTransfer: empty });
-    const right = await within(main).findByRole("region", { name: "右側に結合" });
-    fireEvent.drop(right, { dataTransfer: empty });
-
-    await waitFor(() => expect(desktop.window("thumbnails")).toBeUndefined());
-    const order = within(main)
-      .getAllByRole("region")
-      .map((r) => r.getAttribute("aria-labelledby"));
-    expect(order).toEqual(["pane-preview-heading", "pane-thumbnails-heading"]);
-  });
-
-  it("hides the drop zones when the drag is cancelled", async () => {
-    const { user, desktop, main } = await setup();
-    await popOut(user, main, "Preview");
-    const header = within(desktop.window("preview")!.view.container)
-      .getByRole("heading", { name: "Preview" })
-      .closest("header")!;
-    fireEvent.dragStart(header, { dataTransfer: dataTransfer(true) });
-    await within(main).findByRole("region", { name: "左側に結合" });
-    fireEvent.dragEnd(header, { dataTransfer: dataTransfer(true) });
-    await waitFor(() => expect(within(main).queryByRole("region", { name: "左側に結合" })).not.toBeInTheDocument());
-    expect(desktop.window("preview")).toBeDefined();
+    expect(paneOrder(main)).toEqual(["pane-thumbnails-heading", "pane-preview-heading", "pane-import-heading"]);
   });
 
   it("a pane window starts with the main window's current state", async () => {

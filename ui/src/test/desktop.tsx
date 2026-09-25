@@ -1,8 +1,9 @@
 import { act, render, type RenderResult } from "@testing-library/react";
 import { App, createQueryClient } from "../App";
-import { installMockBackend } from "../mock/backend";
+import { installMockBackend, type MockOptions } from "../mock/backend";
 import type { MockData } from "../mock/data";
 import { createMemoryHub, type PaneKind } from "../windowing/bus";
+import type { Rect } from "../windowing/docking";
 import { MAIN_WINDOW_ID, paneWindowId, type PaneWindow, type WindowHost } from "../windowing/host";
 
 export interface TestWindow {
@@ -13,22 +14,30 @@ export interface TestWindow {
   closed: boolean;
 }
 
+/** Screen rectangle of the simulated main window. */
+export const MAIN_RECT: Rect = { x: 100, y: 100, width: 1200, height: 800 };
+
 /**
  * Simulates several app windows in one document: each window gets its own
  * React tree, query cache and bus connection; the mock backend is shared,
  * like the Rust backend is shared by real windows.
  */
-export function createTestDesktop(options: { prepare?: (data: MockData) => void } = {}) {
+export function createTestDesktop(
+  options: { prepare?: (data: MockData) => void; mock?: Partial<MockOptions> } = {},
+) {
   const hub = createMemoryHub();
   const data: MockData = installMockBackend({
     listDelayMs: 0,
     thumbDelayMs: [0, 0],
+    copyDelayMs: { perFile: 0, perMb: 0 },
     publish: hub.backend.publish,
     storage: null,
+    ...options.mock,
   });
   options.prepare?.(data);
   const windows: TestWindow[] = [];
   const onClosed = new Map<string, (() => void)[]>();
+  const geometry = new Map<string, (self: Rect, main: Rect | null) => void>();
   let focusCount = 0;
 
   function mount(id: string, pane: PaneKind | null): TestWindow {
@@ -60,6 +69,10 @@ export function createTestDesktop(options: { prepare?: (data: MockData) => void 
         } satisfies PaneWindow;
       },
       closeSelf: () => queueMicrotask(() => win.close()),
+      watchGeometry(callback) {
+        geometry.set(id, callback);
+        return () => geometry.delete(id);
+      },
     };
     const container = document.body.appendChild(document.createElement("div"));
     container.dataset.window = id;
@@ -71,13 +84,20 @@ export function createTestDesktop(options: { prepare?: (data: MockData) => void 
   }
 
   const main = mount(MAIN_WINDOW_ID, null);
+  const window = (kind: PaneKind) => windows.find((w) => w.pane === kind && !w.closed);
   return {
     hub,
     data,
     main,
     windows,
     openWindows: () => windows.filter((w) => !w.closed),
-    window: (kind: PaneKind) => windows.find((w) => w.pane === kind && !w.closed),
+    window,
     focusCount: () => focusCount,
+    /** Simulates the user moving a pane window (by its title bar) to `rect`. */
+    moveWindow(kind: PaneKind, rect: Rect) {
+      const w = window(kind);
+      if (!w) throw new Error(`no ${kind} window`);
+      act(() => geometry.get(w.id)?.(rect, MAIN_RECT));
+    },
   };
 }

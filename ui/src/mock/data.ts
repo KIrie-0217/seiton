@@ -22,6 +22,8 @@ const SHAPES: Shape[] = [
   { kinds: ["raw"], weight: 1 },
   { kinds: ["raw", "heif"], weight: 1 },
   { kinds: ["video"], weight: 1 },
+  // A metadata sidecar next to the image (XMP; Sony cameras write clip XML).
+  { kinds: ["raw", "jpeg", "sidecar"], weight: 1 },
 ];
 
 const EXT: Record<MediaKind, string> = {
@@ -37,7 +39,7 @@ const SIZE_MB: Record<MediaKind, [number, number]> = {
   heif: [4, 9],
   jpeg: [5, 12],
   video: [120, 900],
-  sidecar: [0, 0],
+  sidecar: [0.004, 0.02],
 };
 
 function pick<T extends { weight: number }>(items: T[], r: number): T {

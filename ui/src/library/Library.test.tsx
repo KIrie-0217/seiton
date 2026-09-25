@@ -108,6 +108,23 @@ describe("Library (mock backend)", () => {
     }
   });
 
+  it("lights stars up to the pointer like a gauge", async () => {
+    const { user, grid, mainAssets } = await setup();
+    const target = mainAssets().find((a) => a.rating === null)!;
+    const bar = within(cell(grid, target.name)).getByRole("group", { name: "評価なし" });
+    const lit = () => within(bar).getAllByRole("button").map((b) => b.classList.contains("lit"));
+
+    expect(lit()).toEqual([false, false, false, false, false]);
+    await user.hover(within(bar).getByRole("button", { name: `${target.name} を★3にする` }));
+    expect(lit()).toEqual([true, true, true, false, false]);
+    await user.unhover(bar);
+    expect(lit()).toEqual([false, false, false, false, false]);
+
+    await user.click(within(bar).getByRole("button", { name: `${target.name} を★3にする` }));
+    await user.unhover(bar);
+    await waitFor(() => expect(lit()).toEqual([true, true, true, false, false]));
+  });
+
   it("rates a single cell by clicking its stars without changing the selection", async () => {
     const { user, main, grid, mainAssets } = await setup();
     const [first, second] = mainAssets();

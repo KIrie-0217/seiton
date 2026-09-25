@@ -18,7 +18,7 @@ describe("mock data", () => {
   it("contains a mix of kinds, ratings and import states", () => {
     const assets = [...createMockData().assets.values()].flat();
     const kinds = new Set(assets.flatMap((x) => x.files.map((f) => f.kind)));
-    expect(kinds).toEqual(new Set(["raw", "jpeg", "heif", "video"]));
+    expect(kinds).toEqual(new Set(["raw", "jpeg", "heif", "video", "sidecar"]));
     expect(assets.some((x) => x.rating === null)).toBe(true);
     expect(assets.some((x) => (x.rating ?? 0) >= 4)).toBe(true);
     expect(assets.some((x) => x.imported)).toBe(true);
