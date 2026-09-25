@@ -64,6 +64,8 @@ export function WorkspaceProvider({ host, bus, children }: WorkspaceProviderProp
           applyAssets(client, msg.assets);
           break;
         case "dock":
+        case "paneDragStart":
+        case "paneDragEnd":
           break; // handled by the main layout
       }
     });

@@ -1,15 +1,43 @@
-import { useId } from "react";
+import { useId, type MouseEvent } from "react";
 
 const STARS = [1, 2, 3, 4, 5] as const;
 
-/** Read-only star display, e.g. ★★★☆☆. */
-export function StarDisplay({ rating }: { rating: number | null }) {
+interface StarBarProps {
+  /** Name of the rated item, used in button labels. */
+  name: string;
+  rating: number | null;
+  /** Clicking the current rating clears it (Lightroom style). */
+  onRate: (rating: number | null) => void;
+}
+
+/**
+ * Clickable stars for a grid cell. The buttons are not tab stops: inside the
+ * grid, keyboard users rate with 0–5 on the focused cell.
+ */
+export function StarBar({ name, rating, onRate }: StarBarProps) {
   const stars = rating ?? 0;
-  const label = stars === 0 ? "評価なし" : `評価 ${stars}`;
+  function click(e: MouseEvent, n: number) {
+    // Do not change the selection or focus when rating from the cell.
+    e.stopPropagation();
+    onRate(n === stars ? null : n);
+  }
   return (
-    <span className="stars" role="img" aria-label={label}>
-      {STARS.map((n) => (n <= stars ? "★" : "☆")).join("")}
-    </span>
+    <div className="star-bar" role="group" aria-label={stars === 0 ? "評価なし" : `評価 ${stars}`}>
+      {STARS.map((n) => (
+        <button
+          key={n}
+          type="button"
+          tabIndex={-1}
+          className={n <= stars ? "lit" : undefined}
+          aria-label={n === stars ? `${name} の評価を解除` : `${name} を★${n}にする`}
+          aria-pressed={n <= stars}
+          onClick={(e) => click(e, n)}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {n <= stars ? "★" : "☆"}
+        </button>
+      ))}
+    </div>
   );
 }
 

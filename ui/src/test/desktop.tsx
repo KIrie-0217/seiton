@@ -3,7 +3,7 @@ import { App, createQueryClient } from "../App";
 import { installMockBackend } from "../mock/backend";
 import type { MockData } from "../mock/data";
 import { createMemoryHub, type PaneKind } from "../windowing/bus";
-import { MAIN_WINDOW_ID, type PaneWindow, type WindowHost } from "../windowing/host";
+import { MAIN_WINDOW_ID, paneWindowId, type PaneWindow, type WindowHost } from "../windowing/host";
 
 export interface TestWindow {
   id: string;
@@ -28,10 +28,10 @@ export function createTestDesktop(options: { prepare?: (data: MockData) => void 
   });
   options.prepare?.(data);
   const windows: TestWindow[] = [];
-  let counter = 0;
+  const onClosed = new Map<string, (() => void)[]>();
+  let focusCount = 0;
 
   function mount(id: string, pane: PaneKind | null): TestWindow {
-    const callbacks: (() => void)[] = [];
     const win: TestWindow = {
       id,
       pane,
@@ -41,24 +41,26 @@ export function createTestDesktop(options: { prepare?: (data: MockData) => void 
         if (win.closed) return;
         win.closed = true;
         act(() => win.view.unmount());
-        callbacks.forEach((cb) => cb());
+        win.view.container.remove();
+        (onClosed.get(id) ?? []).splice(0).forEach((cb) => cb());
       },
     };
     const host: WindowHost = {
       windowId: id,
       async openPane(kind) {
-        counter += 1;
-        const child = mount(`pane-test-${counter}`, kind);
+        const childId = paneWindowId(kind);
+        // One window per pane kind, like the real hosts.
+        const child = windows.find((w) => w.id === childId && !w.closed) ?? mount(childId, kind);
         return {
           id: child.id,
-          focus: () => {},
+          kind,
+          focus: () => void (focusCount += 1),
           close: () => child.close(),
-          onClosed: (cb) => childCallbacks.get(child.id)?.push(cb),
+          onClosed: (cb) => void onClosed.set(child.id, [...(onClosed.get(child.id) ?? []), cb]),
         } satisfies PaneWindow;
       },
       closeSelf: () => queueMicrotask(() => win.close()),
     };
-    childCallbacks.set(id, callbacks);
     const container = document.body.appendChild(document.createElement("div"));
     container.dataset.window = id;
     win.view = render(<App library={{ host, bus: hub.connect(id), pane }} queryClient={createQueryClient()} />, {
@@ -68,7 +70,14 @@ export function createTestDesktop(options: { prepare?: (data: MockData) => void 
     return win;
   }
 
-  const childCallbacks = new Map<string, (() => void)[]>();
   const main = mount(MAIN_WINDOW_ID, null);
-  return { hub, data, main, windows, openWindows: () => windows.filter((w) => !w.closed) };
+  return {
+    hub,
+    data,
+    main,
+    windows,
+    openWindows: () => windows.filter((w) => !w.closed),
+    window: (kind: PaneKind) => windows.find((w) => w.pane === kind && !w.closed),
+    focusCount: () => focusCount,
+  };
 }

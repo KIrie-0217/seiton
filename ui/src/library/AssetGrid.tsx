@@ -11,10 +11,10 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AssetView, MediaKind } from "../api";
 import { useThumbnail } from "./queries";
-import { StarDisplay } from "./StarRating";
+import { StarBar } from "./StarRating";
 
 const MIN_CELL_WIDTH = 180;
-const ROW_HEIGHT = 200;
+const ROW_HEIGHT = 224;
 /** Used before the container has been measured (and in tests without layout). */
 const FALLBACK_WIDTH = 900;
 
@@ -59,6 +59,8 @@ export interface AssetGridProps {
   onToggleSelection: (index: number) => void;
   /** Rating shortcut (0 clears, 1–5 set) for the current selection. */
   onRate: (rating: number | null) => void;
+  /** Rating set by clicking the stars of one cell (that asset only). */
+  onRateAsset: (asset: AssetView, rating: number | null) => void;
   onOpen?: (index: number) => void;
 }
 
@@ -67,7 +69,16 @@ export interface AssetGridProps {
  * move focus (roving tabindex), Space toggles selection and 0–5 rate the
  * selection. Only visible rows are rendered, so large cards stay fast.
  */
-export function AssetGrid({ assets, activeIndex, selectedIds, onActivate, onToggleSelection, onRate, onOpen }: AssetGridProps) {
+export function AssetGrid({
+  assets,
+  activeIndex,
+  selectedIds,
+  onActivate,
+  onToggleSelection,
+  onRate,
+  onRateAsset,
+  onOpen,
+}: AssetGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const measured = useElementWidth(scrollRef);
   const width = measured > 0 ? measured : FALLBACK_WIDTH;
@@ -220,16 +231,16 @@ export function AssetGrid({ assets, activeIndex, selectedIds, onActivate, onTogg
                     <Thumbnail asset={asset} />
                     <div className="cell-caption">
                       <span className="cell-name">{asset.name}</span>
-                      <StarDisplay rating={asset.rating} />
+                      <div className="cell-badges">
+                        {asset.files.map((f) => (
+                          <span key={f.path} className={`badge kind-${f.kind}`}>
+                            {KIND_LABEL[f.kind]}
+                          </span>
+                        ))}
+                        {asset.imported && <span className="badge imported">取込済</span>}
+                      </div>
                     </div>
-                    <div className="cell-badges">
-                      {asset.files.map((f) => (
-                        <span key={f.path} className={`badge kind-${f.kind}`}>
-                          {KIND_LABEL[f.kind]}
-                        </span>
-                      ))}
-                      {asset.imported && <span className="badge imported">取込済</span>}
-                    </div>
+                    <StarBar name={asset.name} rating={asset.rating} onRate={(r) => onRateAsset(asset, r)} />
                   </div>
                 );
               })}

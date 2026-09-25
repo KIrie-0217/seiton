@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { CloseIcon, DockIcon, FocusIcon, GripIcon, IconButton, PopOutIcon, ShowIcon } from "../icons";
 import type { PaneKind } from "../windowing/bus";
 import type { PaneWindow } from "../windowing/host";
 import { SplitView } from "../windowing/SplitView";
@@ -8,9 +9,16 @@ import { PreviewPane } from "./PreviewPane";
 import { ThumbnailsPane } from "./ThumbnailsPane";
 import { useLibrary } from "./useLibrary";
 
-export const PANE_TITLE: Record<PaneKind, string> = { thumbnails: "一覧", preview: "プレビュー" };
+export const PANE_TITLE: Record<PaneKind, string> = { thumbnails: "Thumbnails", preview: "Preview" };
 
 const PANE_ORDER: PaneKind[] = ["thumbnails", "preview"];
+
+/** Drag data type carrying the pane kind between windows. */
+export const PANE_MIME = "application/x-seiton-pane";
+
+function isPaneKind(v: unknown): v is PaneKind {
+  return v === "thumbnails" || v === "preview";
+}
 
 export function PaneContent({ kind }: { kind: PaneKind }) {
   return kind === "thumbnails" ? <ThumbnailsPane /> : <PreviewPane />;
@@ -19,14 +27,30 @@ export function PaneContent({ kind }: { kind: PaneKind }) {
 interface PaneFrameProps {
   kind: PaneKind;
   actions: ReactNode;
+  /** Makes the header a drag handle (pane windows: drop onto the main window). */
+  dragHandle?: {
+    onDragStart: (e: DragEvent) => void;
+    onDragEnd: (e: DragEvent) => void;
+  };
 }
 
-/** A titled region with pane actions (pop out, hide, dock...). */
-export function PaneFrame({ kind, actions }: PaneFrameProps) {
+/** A titled region with icon actions. */
+export function PaneFrame({ kind, actions, dragHandle }: PaneFrameProps) {
   const headingId = `pane-${kind}-heading`;
   return (
     <section className="pane" aria-labelledby={headingId}>
-      <header className="pane-header">
+      <header
+        className={`pane-header${dragHandle ? " draggable" : ""}`}
+        draggable={dragHandle ? true : undefined}
+        onDragStart={dragHandle?.onDragStart}
+        onDragEnd={dragHandle?.onDragEnd}
+        title={dragHandle ? "メインウィンドウへドラッグして結合" : undefined}
+      >
+        {dragHandle && (
+          <span className="drag-grip">
+            <GripIcon />
+          </span>
+        )}
         <h2 id={headingId}>{PANE_TITLE[kind]}</h2>
         <div className="pane-actions">{actions}</div>
       </header>
@@ -35,93 +59,153 @@ export function PaneFrame({ kind, actions }: PaneFrameProps) {
   );
 }
 
-interface External {
-  window: PaneWindow;
-  kind: PaneKind;
-  /** Put the pane back into the main window when this window closes. */
-  dockOnClose: boolean;
+type Placement = "first" | "second";
+
+/** Inserts `kind` into the docked list (max two, no duplicates). */
+function placePane(docked: PaneKind[], kind: PaneKind, at?: Placement): PaneKind[] {
+  const others = docked.filter((k) => k !== kind);
+  if (at === "first") return [kind, ...others];
+  if (at === "second") return [...others, kind];
+  return docked.includes(kind) ? docked : PANE_ORDER.filter((k) => k === kind || docked.includes(k));
 }
 
 /**
- * Main window: device list plus up to two panes in a split view. Any pane
- * can be moved to its own window (and docked back), and extra windows can
- * be opened, e.g. a second thumbnail list on another monitor.
+ * Main window: devices plus up to two panes in a split view. Each pane
+ * exists once: docked here, in its own window, or hidden. A pane window is
+ * docked back by closing it, with its dock button, or by dragging its
+ * header onto this window.
  */
 export function Library() {
   const { host, bus } = useWorkspace();
   const lib = useLibrary();
   const [docked, setDocked] = useState<PaneKind[]>(PANE_ORDER);
-  const [externals, setExternals] = useState<External[]>([]);
+  const [externals, setExternals] = useState<Partial<Record<PaneKind, PaneWindow>>>({});
+  const [dragging, setDragging] = useState<PaneKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const externalsRef = useRef(externals);
   useEffect(() => {
     externalsRef.current = externals;
   }, [externals]);
 
-  const dock = useCallback((kind: PaneKind) => {
-    setDocked((prev) => (prev.includes(kind) ? prev : PANE_ORDER.filter((k) => k === kind || prev.includes(k))));
+  const dock = useCallback((kind: PaneKind, at?: Placement) => {
+    setDocked((prev) => placePane(prev, kind, at));
   }, []);
 
-  const open = useCallback(
-    async (kind: PaneKind, dockOnClose: boolean) => {
-      setError(null);
-      try {
-        const win = await host.openPane(kind);
-        setExternals((prev) => [...prev, { window: win, kind, dockOnClose }]);
-        win.onClosed(() => {
-          const ext = externalsRef.current.find((e) => e.window.id === win.id);
-          setExternals((prev) => prev.filter((e) => e.window.id !== win.id));
-          if (ext?.dockOnClose) dock(ext.kind);
-        });
-        return true;
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
-        return false;
-      }
+  /** Docks `kind` and closes its window if it has one. */
+  const dockAndClose = useCallback(
+    (kind: PaneKind, at?: Placement) => {
+      dock(kind, at);
+      externalsRef.current[kind]?.close();
     },
-    [dock, host],
+    [dock],
   );
 
   async function popOut(kind: PaneKind) {
-    if (await open(kind, true)) setDocked((prev) => prev.filter((k) => k !== kind));
+    setError(null);
+    try {
+      const win = await host.openPane(kind);
+      if (externalsRef.current[kind]?.id !== win.id) {
+        win.onClosed(() => {
+          setExternals((prev) => {
+            const next = { ...prev };
+            delete next[kind];
+            return next;
+          });
+          // A pane never disappears by closing its window: it comes back here.
+          dock(kind);
+        });
+      }
+      setExternals((prev) => ({ ...prev, [kind]: win }));
+      setDocked((prev) => prev.filter((k) => k !== kind));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  // A pane window asked to be docked: re-dock when it closes.
   useEffect(
     () =>
       bus.subscribe((msg) => {
-        if (msg.type !== "dock") return;
-        setExternals((prev) => prev.map((e) => (e.window.id === msg.from ? { ...e, dockOnClose: true } : e)));
-        dock(msg.pane);
+        switch (msg.type) {
+          case "dock":
+            dock(msg.pane);
+            break;
+          case "paneDragStart":
+            setDragging(msg.pane);
+            break;
+          case "paneDragEnd":
+            setDragging((cur) => (cur === msg.pane ? null : cur));
+            break;
+          default:
+            break;
+        }
       }),
     [bus, dock],
   );
 
   // Pane windows do not outlive the main window (Rust does the same in Tauri).
   useEffect(() => {
-    const closeAll = () => externalsRef.current.forEach((e) => e.window.close());
+    const closeAll = () => Object.values(externalsRef.current).forEach((w) => w?.close());
     window.addEventListener("pagehide", closeAll);
     return () => window.removeEventListener("pagehide", closeAll);
   }, []);
 
-  const hidden = PANE_ORDER.filter((k) => !docked.includes(k) && !externals.some((e) => e.kind === k && e.dockOnClose));
+  // ---- drop target ----
+
+  function draggedPane(e: DragEvent): PaneKind | null {
+    const data = e.dataTransfer?.getData(PANE_MIME);
+    if (isPaneKind(data)) return data;
+    // Some platforms do not carry custom drag data across windows; fall
+    // back to what the pane window announced on the bus.
+    return dragging;
+  }
+
+  function acceptsDrag(e: DragEvent): boolean {
+    return Boolean(dragging) || Boolean(e.dataTransfer?.types.includes(PANE_MIME));
+  }
+
+  function onZoneDragOver(e: DragEvent) {
+    if (!acceptsDrag(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  }
+
+  function onWorkspaceDragEnter(e: DragEvent) {
+    if (!dragging && e.dataTransfer?.types.includes(PANE_MIME)) {
+      // Drag data is readable only on drop; show the zones for a pane that
+      // is in its own window (the drop reads the real kind).
+      const guess = PANE_ORDER.find((k) => externalsRef.current[k]);
+      if (guess) setDragging(guess);
+    }
+  }
+
+  function onZoneDrop(e: DragEvent, at: Placement) {
+    const kind = draggedPane(e);
+    e.preventDefault();
+    setDragging(null);
+    if (kind && externalsRef.current[kind]) dockAndClose(kind, at);
+  }
+
+  const dropping = dragging !== null && externals[dragging] !== undefined;
+
+  // ---- render ----
 
   function paneActions(kind: PaneKind) {
     const last = docked.length === 1;
     return (
       <>
-        <button
-          type="button"
+        <IconButton
+          label={`${PANE_TITLE[kind]} を別ウィンドウで開く`}
+          title={last ? "最後のパネルは別ウィンドウにできません" : undefined}
+          icon={<PopOutIcon />}
           onClick={() => void popOut(kind)}
           disabled={last}
-          title={last ? "最後のパネルは移動できません" : undefined}
-        >
-          別ウィンドウで開く
-        </button>
+        />
         {!last && (
-          <button type="button" onClick={() => setDocked((prev) => prev.filter((k) => k !== kind))}>
-            閉じる
-          </button>
+          <IconButton
+            label={`${PANE_TITLE[kind]} を閉じる`}
+            icon={<CloseIcon />}
+            onClick={() => setDocked((prev) => prev.filter((k) => k !== kind))}
+          />
         )}
       </>
     );
@@ -132,52 +216,44 @@ export function Library() {
   return (
     <div className="library">
       <aside className="sidebar">
-        <h2>デバイス</h2>
+        <h2>Devices</h2>
         {lib.devices.isPending && <p>検出中…</p>}
         {lib.devices.isError && <p role="alert">デバイスを取得できません: {String(lib.devices.error)}</p>}
         {lib.devices.data && (
           <DeviceList devices={lib.devices.data} selectedId={lib.deviceId} onSelect={lib.selectDevice} />
         )}
 
-        <h2>ウィンドウ</h2>
-        <div className="window-actions">
-          {hidden.map((k) => (
-            <button key={k} type="button" onClick={() => dock(k)}>
-              {PANE_TITLE[k]}を表示
-            </button>
-          ))}
-          <button type="button" onClick={() => void open("thumbnails", false)}>
-            新しい一覧ウィンドウ
-          </button>
-          <button type="button" onClick={() => void open("preview", false)}>
-            新しいプレビューウィンドウ
-          </button>
-        </div>
-        {error && <p role="alert">{error}</p>}
-        {externals.length > 0 && (
-          <ul className="external-list" aria-label="開いているウィンドウ">
-            {externals.map((e) => (
-              <li key={e.window.id}>
-                <span>{PANE_TITLE[e.kind]}</span>
-                <button type="button" onClick={() => e.window.focus()}>
-                  前面へ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    dock(e.kind);
-                    e.window.close();
-                  }}
-                >
-                  メインに戻す
-                </button>
+        <h2>Windows</h2>
+        <ul className="window-list" aria-label="Windows">
+          {PANE_ORDER.map((kind) => {
+            const ext = externals[kind];
+            const isDocked = docked.includes(kind);
+            const status = ext ? "別ウィンドウ" : isDocked ? "メインウィンドウ" : "非表示";
+            return (
+              <li key={kind}>
+                <span className="window-name">{PANE_TITLE[kind]}</span>
+                <span className="window-status">{status}</span>
+                {ext && (
+                  <>
+                    <IconButton label={`${PANE_TITLE[kind]} を前面に表示`} icon={<FocusIcon />} onClick={() => ext.focus()} />
+                    <IconButton
+                      label={`${PANE_TITLE[kind]} をメインウィンドウに戻す`}
+                      icon={<DockIcon />}
+                      onClick={() => dockAndClose(kind)}
+                    />
+                  </>
+                )}
+                {!ext && !isDocked && (
+                  <IconButton label={`${PANE_TITLE[kind]} を表示`} icon={<ShowIcon />} onClick={() => dock(kind)} />
+                )}
               </li>
-            ))}
-          </ul>
-        )}
+            );
+          })}
+        </ul>
+        {error && <p role="alert">{error}</p>}
       </aside>
 
-      <div className="workspace">
+      <div className="workspace" onDragEnter={onWorkspaceDragEnter}>
         {firstKind && secondKind ? (
           <SplitView
             first={<PaneFrame kind={firstKind} actions={paneActions(firstKind)} />}
@@ -186,12 +262,30 @@ export function Library() {
         ) : (
           firstKind && <PaneFrame kind={firstKind} actions={paneActions(firstKind)} />
         )}
+
+        {dropping && (
+          <div className="drop-overlay" aria-label="結合する位置">
+            {(["first", "second"] as const).map((at) => (
+              <div
+                key={at}
+                className="drop-zone"
+                role="region"
+                aria-label={at === "first" ? "左側に結合" : "右側に結合"}
+                onDragOver={onZoneDragOver}
+                onDragEnter={onZoneDragOver}
+                onDrop={(e) => onZoneDrop(e, at)}
+              >
+                {at === "first" ? "← 左側に結合" : "右側に結合 →"}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** Root of a pane window: one pane plus a "back to main" action. */
+/** Root of a pane window: one pane; dock back by button or drag and drop. */
 export function PaneWindowLayout({ kind }: { kind: PaneKind }) {
   const { host, bus } = useWorkspace();
   const lib = useLibrary();
@@ -201,15 +295,24 @@ export function PaneWindowLayout({ kind }: { kind: PaneKind }) {
     host.closeSelf();
   }
 
+  function onDragStart(e: DragEvent) {
+    e.dataTransfer?.setData(PANE_MIME, kind);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    bus.publish({ type: "paneDragStart", from: host.windowId, pane: kind });
+  }
+
+  function onDragEnd() {
+    bus.publish({ type: "paneDragEnd", from: host.windowId, pane: kind });
+  }
+
   return (
     <div className="pane-window">
       <p className="pane-window-device">{lib.device ? lib.device.label : "デバイス未選択"}</p>
       <PaneFrame
         kind={kind}
+        dragHandle={{ onDragStart, onDragEnd }}
         actions={
-          <button type="button" onClick={dockBack}>
-            メインウィンドウに戻す
-          </button>
+          <IconButton label={`${PANE_TITLE[kind]} をメインウィンドウに戻す`} icon={<DockIcon />} onClick={dockBack} />
         }
       />
     </div>

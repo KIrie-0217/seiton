@@ -51,6 +51,7 @@ export function ThumbnailsPane() {
           onActivate={onActivate}
           onToggleSelection={onToggleSelection}
           onRate={onRate}
+          onRateAsset={(asset, rating) => setRating(rating, [asset])}
         />
       )}
       <p className="shortcut-hint">

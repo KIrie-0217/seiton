@@ -4,7 +4,7 @@
 /// Label of the main window (Tauri's default for the first window).
 pub const MAIN: &str = "main";
 
-/// Prefix of pane windows opened from the UI.
+/// Prefix of pane windows opened from the UI (`pane-thumbnails`, `pane-preview`).
 pub const PANE_PREFIX: &str = "pane-";
 
 /// Whether a window with this label is a pane window.

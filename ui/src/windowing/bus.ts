@@ -20,7 +20,10 @@ export type BusMessage =
   | { type: "state"; from: string; state: SharedState }
   | { type: "stateRequest"; from: string }
   | { type: "assetsUpdated"; from: string; assets: AssetView[] }
-  | { type: "dock"; from: string; pane: PaneKind };
+  | { type: "dock"; from: string; pane: PaneKind }
+  /** A pane window started / stopped dragging its pane (to dock it by drop). */
+  | { type: "paneDragStart"; from: string; pane: PaneKind }
+  | { type: "paneDragEnd"; from: string; pane: PaneKind };
 
 export type BusListener = (msg: BusMessage) => void;
 

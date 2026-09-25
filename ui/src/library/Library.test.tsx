@@ -76,7 +76,7 @@ describe("Library (mock backend)", () => {
 
     await user.keyboard("4");
     await waitFor(() =>
-      expect(within(cell(grid, sixth!.name)).getByRole("img", { name: "評価 4" })).toBeInTheDocument(),
+      expect(within(cell(grid, sixth!.name)).getByRole("group", { name: "評価 4" })).toBeInTheDocument(),
     );
     const detail = main.getByRole("complementary", { name: "詳細" });
     expect(within(detail).getByRole("radio", { name: "★4" })).toBeChecked();
@@ -84,7 +84,7 @@ describe("Library (mock backend)", () => {
 
     await user.keyboard("0");
     await waitFor(() =>
-      expect(within(cell(grid, sixth!.name)).getByRole("img", { name: "評価なし" })).toBeInTheDocument(),
+      expect(within(cell(grid, sixth!.name)).getByRole("group", { name: "評価なし" })).toBeInTheDocument(),
     );
   });
 
@@ -103,9 +103,31 @@ describe("Library (mock backend)", () => {
 
     for (const a of [first, second, third]) {
       await waitFor(() =>
-        expect(within(cell(grid, a!.name)).getByRole("img", { name: "評価 5" })).toBeInTheDocument(),
+        expect(within(cell(grid, a!.name)).getByRole("group", { name: "評価 5" })).toBeInTheDocument(),
       );
     }
+  });
+
+  it("rates a single cell by clicking its stars without changing the selection", async () => {
+    const { user, main, grid, mainAssets } = await setup();
+    const [first, second] = mainAssets();
+
+    await user.click(cell(grid, first!.name));
+    await user.click(within(cell(grid, second!.name)).getByRole("button", { name: `${second!.name} を★4にする` }));
+
+    await waitFor(() =>
+      expect(within(cell(grid, second!.name)).getByRole("group", { name: "評価 4" })).toBeInTheDocument(),
+    );
+    // Only the clicked asset changed; the selection stayed on the first one.
+    expect(cell(grid, first!.name)).toHaveAttribute("aria-selected", "true");
+    expect(cell(grid, second!.name)).toHaveAttribute("aria-selected", "false");
+    expect(main.getByRole("complementary", { name: "詳細" })).toHaveTextContent(first!.name);
+
+    // Clicking the current rating clears it.
+    await user.click(within(cell(grid, second!.name)).getByRole("button", { name: `${second!.name} の評価を解除` }));
+    await waitFor(() =>
+      expect(within(cell(grid, second!.name)).getByRole("group", { name: "評価なし" })).toBeInTheDocument(),
+    );
   });
 
   it("filters by minimum rating and kind", async () => {
@@ -116,7 +138,7 @@ describe("Library (mock backend)", () => {
     const min3 = assets.filter((a) => (a.rating ?? 0) >= 3);
     expect(main.getByText(`${min3.length} / 50 件`)).toBeInTheDocument();
     for (const c of within(grid).getAllByRole("gridcell")) {
-      const stars = within(c).getByRole("img", { name: /評価/ }).getAttribute("aria-label")!;
+      const stars = within(c).getByRole("group", { name: /評価/ }).getAttribute("aria-label")!;
       expect(Number(stars.replace("評価 ", ""))).toBeGreaterThanOrEqual(3);
     }
 

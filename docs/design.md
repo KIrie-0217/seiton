@@ -373,17 +373,23 @@ flowchart LR
 - DTO（`src-tauri/src/dto.rs`）: `DeviceView`、`AssetView`、`FileView`、`RatingUpdate`、`RatingSource`、`TransportView`、`FolderScan`、`GroupView`。`MediaKind` は `seiton-core` の `ts` feature で生成する。`u64` は ts-rs の既定では `bigint` になるため `number` を指定している。
 - コマンド（UI 側 `ui/src/api.ts`）: `list_devices`、`list_assets(deviceId)`、`set_rating(update)`、`get_thumbnail(assetId)`。現時点ではモックバックエンド（`ui/src/mock/`）のみが実装しており、Rust 側の実装は Task 4〜7 で追加する。それまで通常起動（`npm run tauri dev`）では Task 2 のフォルダ一覧を表示する。
 - 一覧は ARIA grid パターン（roving tabindex）。矢印・Home/End・PageUp/PageDown で移動、Space で選択の追加/解除、0〜5 で評価（0 は解除）、Ctrl/⌘+クリックで追加選択。
+- 一覧のセルの星はクリックで変更できる（そのセルだけが対象。選択は変えない。現在の評価の星をもう一度押すと解除）。星のボタンは Tab の移動対象にしない（キーボードではフォーカス中のセルに 0〜5 で評価する）。
 - 評価 0 と未設定（`null`）はどちらも「未評価」として扱う。
 - 部品ライブラリは入れず、ネイティブ要素（radio、checkbox、select）で実装した。複雑な部品が必要になった時点で React Aria を検討する。
 - サムネイルは TanStack Query でメモリ上にキャッシュする（Task 6/7 で `thumb://` とディスクキャッシュに置き換える）。
 
 ### 9.1 分割表示と複数ウィンドウ（Task 3.1）
 
-画面は「パネル」の組み合わせで構成する。パネルの種類は `thumbnails`（絞り込み + サムネイル一覧）と `preview`（プレビュー + 詳細 + 評価）。
+画面は「パネル」の組み合わせで構成する。パネルの種類は `thumbnails`（表示名 Thumbnails。絞り込み + サムネイル一覧）と `preview`（表示名 Preview。プレビュー + 詳細 + 評価）。
 
-- メインウィンドウ: 左にデバイス一覧とウィンドウ操作、右にパネルを最大 2 つ左右に分割して表示する。境界はドラッグと矢印キーで調整でき（WAI-ARIA window splitter）、比率は保存する。
-- パネルの「別ウィンドウで開く」で、そのパネルを外部ウィンドウへ移す。外部ウィンドウを閉じる、または「メインウィンドウに戻す」を押すと、メインの分割表示に戻る。メインに残る最後のパネルは移動できない。
-- 「新しい一覧／プレビューウィンドウ」で追加のウィンドウを開ける（例: 別のモニターに 2 つ目の一覧を別の絞り込みで出す）。追加のウィンドウは閉じてもメインには戻らない。
+- 各パネルはアプリ内に 1 つだけ存在する。状態は「メインウィンドウ」「別ウィンドウ」「非表示」のいずれか。同じ種類のウィンドウを複数開く機能は持たない（混乱を避けるため）。外部ウィンドウのラベルは種類ごとに固定（`pane-thumbnails` / `pane-preview`）で、すでに開いていれば前面に出すだけにする。
+- メインウィンドウ: 左に Devices と Windows（各パネルの状態と操作）、右にパネルを最大 2 つ左右に分割して表示する。境界はドラッグと矢印キーで調整でき（WAI-ARIA window splitter）、比率は保存する。
+- パネル右上のアイコン: 別ウィンドウで開く／閉じる（非表示）。メインに残る最後のパネルは移動・非表示にできない。アイコンボタンには `aria-label` とツールチップを付ける。
+- 外部ウィンドウをメインに戻す方法:
+  - 外部ウィンドウを閉じる（パネルは消えずにメインへ戻る）
+  - 外部ウィンドウのアイコン、または Windows 一覧のアイコン
+  - 外部ウィンドウのパネル見出しをメインウィンドウへドラッグし、表示される「左側に結合」「右側に結合」にドロップする（ドロップ位置で左右の順序が決まる）
+- ドラッグ＆ドロップ: HTML の DnD を使う。Tauri は既定で OS のファイルドロップを横取りして HTML の DnD を無効にするため、全ウィンドウで `dragDropEnabled: false` にしている（ファイルのドロップ取り込みが必要になったら再検討）。ドラッグデータ（`application/x-seiton-pane`）がウィンドウをまたいで届かない環境に備え、外部ウィンドウはドラッグの開始・終了を `paneDragStart` / `paneDragEnd` で通知し、メインはそれを使って結合先を表示・判定する。ドラッグ操作が難しい利用者向けに、アイコンでの復帰も残す。
 - メインウィンドウを閉じると、外部ウィンドウもすべて閉じる（Rust の `on_window_event` とブラウザの `pagehide` の両方で実施）。
 - ウィンドウのラベル: メインは `main`、外部は `pane-*`。`capabilities/default.json` はこの 2 つを対象にし、画面側からのウィンドウ作成（`core:webview:allow-create-webview-window`）、`close`、`set_focus` を許可する。外部ウィンドウは `index.html?pane=<kind>` で開く。
 
@@ -401,7 +407,7 @@ flowchart LR
 - ブラウザ（`npm run dev:mock`）: `BroadcastChannel`。ウィンドウは `window.open` のポップアップ
 - テスト: プロセス内のハブ（1 つのドキュメントに複数のウィンドウを描画して検証）
 
-ウィンドウの作成は `WindowHost` インターフェース（`ui/src/windowing/host.ts`）で抽象化する（Tauri の `WebviewWindow` / ブラウザのポップアップ / テスト用）。
+ウィンドウの作成は `WindowHost` インターフェース（`ui/src/windowing/host.ts`）で抽象化する（Tauri の `WebviewWindow` / ブラウザのポップアップ / テスト用）。どの実装も「種類ごとに 1 ウィンドウ」を保証する。
 
 モックモードでは seiton のコマンドだけをモックに置き換え（`setBackendOverride`）、Tauri の API（ウィンドウ、イベント、ダイアログ）は本物を使う。そのため `npm run tauri:mock` で、モックデータのまま本物の複数ウィンドウを確認できる。モックの評価は `localStorage` に保存し、ウィンドウごとのモックが同じ値を見るようにしている。
 
