@@ -94,22 +94,130 @@ h3 {
 
 .library {
   display: grid;
-  grid-template-columns: 240px 1fr 300px;
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 1rem;
   height: 100%;
   padding-top: 1rem;
 }
 
-.sidebar,
-.detail {
+.sidebar {
   overflow: auto;
 }
 
-.browser {
+.window-actions {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.external-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.external-list li {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.external-list li span {
+  flex: 1;
+}
+
+.workspace {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.workspace > .pane {
+  flex: 1;
+}
+
+.split-view {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+}
+
+.split-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.split-pane > .pane {
+  flex: 1;
+}
+
+.split-separator {
+  cursor: col-resize;
+  background: var(--border);
+  border-radius: 3px;
+  touch-action: none;
+}
+
+.split-separator:hover,
+.split-separator:focus-visible {
+  background: var(--accent);
+}
+
+.pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
+.pane-header h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.pane-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.thumbnails-pane {
+  overflow: hidden;
+}
+
+.pane-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: 0.5rem;
+}
+
+.pane-window > .pane {
+  flex: 1;
+}
+
+.pane-window-device {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .device-list {

@@ -33,6 +33,7 @@
 npm ci
 npm run tauri dev     # アプリを起動
 npm run dev:mock      # モックデータでブラウザ上に画面を表示（http://localhost:1420）
+npm run tauri:mock    # モックデータのまま Tauri アプリとして起動（複数ウィンドウの確認用）
 npm test              # フロントエンドのテスト（Vitest）
 npm run lint          # ESLint
 cargo test --workspace   # Rust のテスト（ui/src/bindings の TypeScript 型も再生成）

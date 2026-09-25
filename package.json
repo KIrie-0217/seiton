@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "dev:mock": "vite --mode mock",
+    "tauri:mock": "tauri dev --config src-tauri/tauri.mock.conf.json",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",

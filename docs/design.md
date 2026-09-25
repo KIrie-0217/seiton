@@ -226,8 +226,10 @@ pub trait MetadataProvider: Send + Sync {
 pub enum Priority { Interactive = 0, Prefetch = 1, Transfer = 2, Background = 3 }
 
 pub trait IoScheduler {
-    /// 表示中と先読みの対象をまとめて差し替える（古い epoch の P0/P1 は無効になる）
-    fn set_viewport(&self, epoch: u64, visible: Vec<AssetKey>, prefetch: Vec<AssetKey>);
+    /// 表示中と先読みの対象をまとめて差し替える（古い epoch の P0/P1 は無効になる）。
+    /// `view` はウィンドウ／パネルごとの ID（§9.1）
+    fn set_viewport(&self, view: ViewId, epoch: u64, visible: Vec<AssetKey>, prefetch: Vec<AssetKey>);
+    fn close_viewport(&self, view: ViewId);
     async fn request(&self, key: JobKey, pri: Priority) -> Result<Bytes>;
 }
 ```
@@ -341,6 +343,7 @@ flowchart LR
 | P3 Background | 全ファイルの評価読み取り、インデックス作成 | 捨てない（後回しにするだけ） |
 
 - 画面は表示中と先読みの対象をまとめて送る（`set_viewport`、スクロールが落ち着いてから約 100ms 後）。送るたびに epoch を増やす。
+- 複数ウィンドウに対応するため、表示範囲はウィンドウ（パネル）ごとに持つ: `set_viewport(view_id, epoch, visible, prefetch)`。epoch もウィンドウごとで、P0/P1 の対象は全ウィンドウの表示範囲の和集合。ウィンドウを閉じたらその表示範囲を消す（§9.1）。
 - スケジューラは古い epoch の P0/P1 を取り出し時に捨てる。実行中の小さな処理は止めずにキャッシュへ入れる。
 - 大きな読み込み（コピー）は 4〜8MB 程度のチャンクに分け、チャンクごとに P0 を割り込ませる。
 - 同じキー（資産 + 種類 + サイズ）の要求はまとめ、完了時に全待機者へ返す。
@@ -373,6 +376,34 @@ flowchart LR
 - 評価 0 と未設定（`null`）はどちらも「未評価」として扱う。
 - 部品ライブラリは入れず、ネイティブ要素（radio、checkbox、select）で実装した。複雑な部品が必要になった時点で React Aria を検討する。
 - サムネイルは TanStack Query でメモリ上にキャッシュする（Task 6/7 で `thumb://` とディスクキャッシュに置き換える）。
+
+### 9.1 分割表示と複数ウィンドウ（Task 3.1）
+
+画面は「パネル」の組み合わせで構成する。パネルの種類は `thumbnails`（絞り込み + サムネイル一覧）と `preview`（プレビュー + 詳細 + 評価）。
+
+- メインウィンドウ: 左にデバイス一覧とウィンドウ操作、右にパネルを最大 2 つ左右に分割して表示する。境界はドラッグと矢印キーで調整でき（WAI-ARIA window splitter）、比率は保存する。
+- パネルの「別ウィンドウで開く」で、そのパネルを外部ウィンドウへ移す。外部ウィンドウを閉じる、または「メインウィンドウに戻す」を押すと、メインの分割表示に戻る。メインに残る最後のパネルは移動できない。
+- 「新しい一覧／プレビューウィンドウ」で追加のウィンドウを開ける（例: 別のモニターに 2 つ目の一覧を別の絞り込みで出す）。追加のウィンドウは閉じてもメインには戻らない。
+- メインウィンドウを閉じると、外部ウィンドウもすべて閉じる（Rust の `on_window_event` とブラウザの `pagehide` の両方で実施）。
+- ウィンドウのラベル: メインは `main`、外部は `pane-*`。`capabilities/default.json` はこの 2 つを対象にし、画面側からのウィンドウ作成（`core:webview:allow-create-webview-window`）、`close`、`set_focus` を許可する。外部ウィンドウは `index.html?pane=<kind>` で開く。
+
+ウィンドウごとに JavaScript の実行環境（React の状態、TanStack Query のキャッシュ）は別になるため、次のように同期する。
+
+| 情報 | 持ち主 | 同期方法 |
+|---|---|---|
+| アセット（評価など） | バックエンド（Rust / モック） | 変更したバックエンドが `assetsUpdated` を全ウィンドウへ送り、各ウィンドウがキャッシュに反映する |
+| 選択中のデバイス、選択、フォーカス中のアセット | 全ウィンドウ共有（`SharedState`） | 変更したウィンドウが `state` を送る。新しいウィンドウは `stateRequest` を送り、メインが現在の状態を返す |
+| 絞り込み、スクロール位置、分割比率 | パネル／ウィンドウごと | 同期しない |
+
+ウィンドウ間のメッセージは `Bus` インターフェース（`ui/src/windowing/bus.ts`）で抽象化する。
+
+- Tauri: イベント `seiton://bus`（`emit` / `listen`）。Rust 側も同じチャネルに `assetsUpdated` を送る（Task 5 以降）
+- ブラウザ（`npm run dev:mock`）: `BroadcastChannel`。ウィンドウは `window.open` のポップアップ
+- テスト: プロセス内のハブ（1 つのドキュメントに複数のウィンドウを描画して検証）
+
+ウィンドウの作成は `WindowHost` インターフェース（`ui/src/windowing/host.ts`）で抽象化する（Tauri の `WebviewWindow` / ブラウザのポップアップ / テスト用）。
+
+モックモードでは seiton のコマンドだけをモックに置き換え（`setBackendOverride`）、Tauri の API（ウィンドウ、イベント、ダイアログ）は本物を使う。そのため `npm run tauri:mock` で、モックデータのまま本物の複数ウィンドウを確認できる。モックの評価は `localStorage` に保存し、ウィンドウごとのモックが同じ値を見るようにしている。
 
 ## 10. 事前検証（Spike）
 

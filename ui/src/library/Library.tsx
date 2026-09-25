@@ -1,114 +1,216 @@
-import { useCallback, useMemo, useState } from "react";
-import { AssetGrid } from "./AssetGrid";
-import { DetailPanel } from "./DetailPanel";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { PaneKind } from "../windowing/bus";
+import type { PaneWindow } from "../windowing/host";
+import { SplitView } from "../windowing/SplitView";
+import { useWorkspace } from "../windowing/Workspace";
 import { DeviceList } from "./DeviceList";
-import { FilterBar } from "./FilterBar";
-import { applyFilter, DEFAULT_FILTER, type AssetFilter } from "./filter";
-import { useAssets, useDevices, useSetRating } from "./queries";
+import { PreviewPane } from "./PreviewPane";
+import { ThumbnailsPane } from "./ThumbnailsPane";
+import { useLibrary } from "./useLibrary";
 
-interface Selection {
-  /** Index into the filtered list of the focused cell. */
-  active: number;
-  ids: ReadonlySet<string>;
+export const PANE_TITLE: Record<PaneKind, string> = { thumbnails: "一覧", preview: "プレビュー" };
+
+const PANE_ORDER: PaneKind[] = ["thumbnails", "preview"];
+
+export function PaneContent({ kind }: { kind: PaneKind }) {
+  return kind === "thumbnails" ? <ThumbnailsPane /> : <PreviewPane />;
 }
 
-const EMPTY: Selection = { active: 0, ids: new Set() };
+interface PaneFrameProps {
+  kind: PaneKind;
+  actions: ReactNode;
+}
 
-/** Device list, filter bar, thumbnail grid and detail panel. */
+/** A titled region with pane actions (pop out, hide, dock...). */
+export function PaneFrame({ kind, actions }: PaneFrameProps) {
+  const headingId = `pane-${kind}-heading`;
+  return (
+    <section className="pane" aria-labelledby={headingId}>
+      <header className="pane-header">
+        <h2 id={headingId}>{PANE_TITLE[kind]}</h2>
+        <div className="pane-actions">{actions}</div>
+      </header>
+      <PaneContent kind={kind} />
+    </section>
+  );
+}
+
+interface External {
+  window: PaneWindow;
+  kind: PaneKind;
+  /** Put the pane back into the main window when this window closes. */
+  dockOnClose: boolean;
+}
+
+/**
+ * Main window: device list plus up to two panes in a split view. Any pane
+ * can be moved to its own window (and docked back), and extra windows can
+ * be opened, e.g. a second thumbnail list on another monitor.
+ */
 export function Library() {
-  const devices = useDevices();
-  const [pickedDevice, setPickedDevice] = useState<string>();
-  const deviceId = pickedDevice ?? devices.data?.[0]?.id;
-  const assets = useAssets(deviceId);
-  const rate = useSetRating(deviceId);
+  const { host, bus } = useWorkspace();
+  const lib = useLibrary();
+  const [docked, setDocked] = useState<PaneKind[]>(PANE_ORDER);
+  const [externals, setExternals] = useState<External[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const externalsRef = useRef(externals);
+  useEffect(() => {
+    externalsRef.current = externals;
+  }, [externals]);
 
-  const [filter, setFilter] = useState<AssetFilter>(DEFAULT_FILTER);
-  const [selection, setSelection] = useState<Selection>(EMPTY);
+  const dock = useCallback((kind: PaneKind) => {
+    setDocked((prev) => (prev.includes(kind) ? prev : PANE_ORDER.filter((k) => k === kind || prev.includes(k))));
+  }, []);
 
-  const all = useMemo(() => assets.data ?? [], [assets.data]);
-  const visible = useMemo(() => applyFilter(all, filter), [all, filter]);
-  const active = Math.min(selection.active, Math.max(0, visible.length - 1));
-  // Only assets that are still visible count as selected.
-  const selected = useMemo(() => visible.filter((a) => selection.ids.has(a.id)), [visible, selection.ids]);
-  const selectedIds = useMemo(() => new Set(selected.map((a) => a.id)), [selected]);
-
-  const onActivate = useCallback(
-    (index: number, mode: "replace" | "toggle" | "focus-only") => {
-      const asset = visible[index];
-      if (!asset) return;
-      setSelection((prev) => {
-        if (mode === "focus-only") return { ...prev, active: index };
-        if (mode === "replace") return { active: index, ids: new Set([asset.id]) };
-        const ids = new Set(prev.ids);
-        if (ids.has(asset.id)) ids.delete(asset.id);
-        else ids.add(asset.id);
-        return { active: index, ids };
-      });
+  const open = useCallback(
+    async (kind: PaneKind, dockOnClose: boolean) => {
+      setError(null);
+      try {
+        const win = await host.openPane(kind);
+        setExternals((prev) => [...prev, { window: win, kind, dockOnClose }]);
+        win.onClosed(() => {
+          const ext = externalsRef.current.find((e) => e.window.id === win.id);
+          setExternals((prev) => prev.filter((e) => e.window.id !== win.id));
+          if (ext?.dockOnClose) dock(ext.kind);
+        });
+        return true;
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+        return false;
+      }
     },
-    [visible],
+    [dock, host],
   );
 
-  const onToggleSelection = useCallback((index: number) => onActivate(index, "toggle"), [onActivate]);
+  async function popOut(kind: PaneKind) {
+    if (await open(kind, true)) setDocked((prev) => prev.filter((k) => k !== kind));
+  }
 
-  const onRate = useCallback(
-    (rating: number | null) => {
-      // Rate the selection, or the focused cell when nothing is selected.
-      const targets = selected.length > 0 ? selected : visible[active] ? [visible[active]] : [];
-      if (targets.length === 0) return;
-      rate.mutate({ assetIds: targets.map((a) => a.id), rating });
-    },
-    [active, rate, selected, visible],
+  // A pane window asked to be docked: re-dock when it closes.
+  useEffect(
+    () =>
+      bus.subscribe((msg) => {
+        if (msg.type !== "dock") return;
+        setExternals((prev) => prev.map((e) => (e.window.id === msg.from ? { ...e, dockOnClose: true } : e)));
+        dock(msg.pane);
+      }),
+    [bus, dock],
   );
 
-  function selectDevice(id: string) {
-    setPickedDevice(id);
-    setSelection(EMPTY);
+  // Pane windows do not outlive the main window (Rust does the same in Tauri).
+  useEffect(() => {
+    const closeAll = () => externalsRef.current.forEach((e) => e.window.close());
+    window.addEventListener("pagehide", closeAll);
+    return () => window.removeEventListener("pagehide", closeAll);
+  }, []);
+
+  const hidden = PANE_ORDER.filter((k) => !docked.includes(k) && !externals.some((e) => e.kind === k && e.dockOnClose));
+
+  function paneActions(kind: PaneKind) {
+    const last = docked.length === 1;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => void popOut(kind)}
+          disabled={last}
+          title={last ? "最後のパネルは移動できません" : undefined}
+        >
+          別ウィンドウで開く
+        </button>
+        {!last && (
+          <button type="button" onClick={() => setDocked((prev) => prev.filter((k) => k !== kind))}>
+            閉じる
+          </button>
+        )}
+      </>
+    );
   }
 
-  function changeFilter(next: AssetFilter) {
-    setFilter(next);
-    setSelection((prev) => ({ ...prev, active: 0 }));
-  }
+  const [firstKind, secondKind] = docked;
 
   return (
     <div className="library">
       <aside className="sidebar">
         <h2>デバイス</h2>
-        {devices.isPending && <p>検出中…</p>}
-        {devices.isError && <p role="alert">デバイスを取得できません: {String(devices.error)}</p>}
-        {devices.data && <DeviceList devices={devices.data} selectedId={deviceId} onSelect={selectDevice} />}
+        {lib.devices.isPending && <p>検出中…</p>}
+        {lib.devices.isError && <p role="alert">デバイスを取得できません: {String(lib.devices.error)}</p>}
+        {lib.devices.data && (
+          <DeviceList devices={lib.devices.data} selectedId={lib.deviceId} onSelect={lib.selectDevice} />
+        )}
+
+        <h2>ウィンドウ</h2>
+        <div className="window-actions">
+          {hidden.map((k) => (
+            <button key={k} type="button" onClick={() => dock(k)}>
+              {PANE_TITLE[k]}を表示
+            </button>
+          ))}
+          <button type="button" onClick={() => void open("thumbnails", false)}>
+            新しい一覧ウィンドウ
+          </button>
+          <button type="button" onClick={() => void open("preview", false)}>
+            新しいプレビューウィンドウ
+          </button>
+        </div>
+        {error && <p role="alert">{error}</p>}
+        {externals.length > 0 && (
+          <ul className="external-list" aria-label="開いているウィンドウ">
+            {externals.map((e) => (
+              <li key={e.window.id}>
+                <span>{PANE_TITLE[e.kind]}</span>
+                <button type="button" onClick={() => e.window.focus()}>
+                  前面へ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dock(e.kind);
+                    e.window.close();
+                  }}
+                >
+                  メインに戻す
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </aside>
 
-      <section className="browser" aria-label="写真と動画の一覧">
-        <FilterBar
-          filter={filter}
-          onChange={changeFilter}
-          shown={visible.length}
-          total={all.length}
-          selected={selected.length}
-        />
-        {rate.isError && <p role="alert">評価を保存できません: {String(rate.error)}</p>}
-        {assets.isPending && deviceId !== undefined && <p>読み込み中…</p>}
-        {assets.isError && <p role="alert">一覧を取得できません: {String(assets.error)}</p>}
-        {assets.data && (
-          <AssetGrid
-            assets={visible}
-            activeIndex={active}
-            selectedIds={selectedIds}
-            onActivate={onActivate}
-            onToggleSelection={onToggleSelection}
-            onRate={onRate}
+      <div className="workspace">
+        {firstKind && secondKind ? (
+          <SplitView
+            first={<PaneFrame kind={firstKind} actions={paneActions(firstKind)} />}
+            second={<PaneFrame kind={secondKind} actions={paneActions(secondKind)} />}
           />
+        ) : (
+          firstKind && <PaneFrame kind={firstKind} actions={paneActions(firstKind)} />
         )}
-        <p className="shortcut-hint">
-          矢印キーで移動、Space で複数選択、0〜5 で評価（0 は解除）、Ctrl/⌘+クリックで追加選択
-        </p>
-      </section>
+      </div>
+    </div>
+  );
+}
 
-      <DetailPanel
-        selected={selected.length > 0 ? selected : visible[active] ? [visible[active]] : []}
-        onRate={onRate}
-        saving={rate.isPending}
+/** Root of a pane window: one pane plus a "back to main" action. */
+export function PaneWindowLayout({ kind }: { kind: PaneKind }) {
+  const { host, bus } = useWorkspace();
+  const lib = useLibrary();
+
+  function dockBack() {
+    bus.publish({ type: "dock", from: host.windowId, pane: kind });
+    host.closeSelf();
+  }
+
+  return (
+    <div className="pane-window">
+      <p className="pane-window-device">{lib.device ? lib.device.label : "デバイス未選択"}</p>
+      <PaneFrame
+        kind={kind}
+        actions={
+          <button type="button" onClick={dockBack}>
+            メインウィンドウに戻す
+          </button>
+        }
       />
     </div>
   );

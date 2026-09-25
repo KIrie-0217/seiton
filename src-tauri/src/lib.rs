@@ -4,6 +4,7 @@ pub mod commands;
 pub mod dto;
 pub mod scan;
 mod state;
+pub mod windows;
 
 use tauri::Manager;
 
@@ -23,6 +24,18 @@ pub fn run() {
             }
             app.manage(state);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event
+                && windows::closes_app(window.label())
+            {
+                // Pane windows never outlive the main window.
+                for (label, other) in window.app_handle().webview_windows() {
+                    if windows::is_pane(&label) {
+                        let _ = other.close();
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,

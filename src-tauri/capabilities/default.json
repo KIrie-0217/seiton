@@ -1,7 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the main window.",
-  "windows": ["main"],
-  "permissions": ["core:default", "opener:default", "dialog:allow-open"]
+  "description": "Capabilities for the main window and pane windows (label pane-*).",
+  "windows": ["main", "pane-*"],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "opener:default",
+    "dialog:allow-open"
+  ]
 }

@@ -57,6 +57,24 @@ describe("mock backend", () => {
     expect(cleared[0]).toMatchObject({ rating: null, ratingSource: null });
   });
 
+  it("shares ratings between per-window backends and publishes updates", async () => {
+    const store = new Map<string, string>();
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    const published: string[] = [];
+    const a = createMockHandler({ ...fast, storage, publish: (m) => published.push(m.type) });
+    const id = a.data.assets.get("mock:mtp:eos-r6m2")![0]!.id;
+    await a.handle("set_rating", { update: { assetIds: [id], rating: 2 } });
+    expect(published).toEqual(["assetsUpdated"]);
+
+    // A window opened later, and one that was already open, both see it.
+    const b = createMockHandler({ ...fast, storage });
+    const listB = (await b.handle("list_assets", { deviceId: "mock:mtp:eos-r6m2" })) as AssetView[];
+    expect(listB[0]).toMatchObject({ rating: 2, ratingSource: "app" });
+    await a.handle("set_rating", { update: { assetIds: [id], rating: 5 } });
+    const again = (await b.handle("list_assets", { deviceId: "mock:mtp:eos-r6m2" })) as AssetView[];
+    expect(again[0]!.rating).toBe(5);
+  });
+
   it("rejects invalid ratings and unknown commands", async () => {
     const { handle, data } = createMockHandler(fast);
     const id = data.assets.get("mock:mtp:eos-r6m2")![0]!.id;
