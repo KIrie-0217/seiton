@@ -1,5 +1,5 @@
 # Fallback profile for any camera following the DCF layout (DCIM/NNNXXXXX).
-# Used when no other profile matches. See docs/design.md §6.
+# Used when no other profile matches. See docs/architecture.md §6.
 schema_version = 1
 id = "generic-dcf"
 name = "Generic (DCF)"

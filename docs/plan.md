@@ -1,6 +1,6 @@
 # seiton 実装計画
 
-設計の詳細は [design.md](design.md) を参照。各タスクは完了時にビルドとテストが通る状態にする。
+設計の詳細は [architecture.md](architecture.md) を参照。各タスクは完了時にビルドとテストが通る状態にする。
 
 | # | タスク | 状態 |
 |---|---|---|
@@ -25,7 +25,7 @@
 ## Task 0: リポジトリ作成と設計書・計画書の配置
 
 - 目的: 設計書と計画書のみを含む初期リポジトリを作成し、GitHub に公開する。
-- 内容: `README.md`、`docs/design.md`、`docs/plan.md`、`LICENSE`（MIT）、`.gitignore`（Rust / Node / Tauri）。
+- 内容: `README.md`、`docs/architecture.md`、`docs/plan.md`、`LICENSE`（MIT）、`.gitignore`（Rust / Node / Tauri）。
 - デモ: GitHub 上で README・設計書・計画書が閲覧でき、mermaid 図が表示される。
 
 ## Task 1: プロジェクトの土台
@@ -60,7 +60,7 @@
 ## Task 3.1: 分割表示・複数ウィンドウ・取り込み設定（モック段階）
 
 - 目的: パネルの分割表示と外部ウィンドウ、取り込み設定と取り込み操作を、モックの段階で作り込む（UI の骨格に関わるため）。
-- 内容（詳細は design.md §9.1、§9.2）:
+- 内容（詳細は architecture.md §9.1、§9.2）:
   - パネル（Thumbnails / Preview / Import Settings）。メインは左に Thumbnails、右に Preview と Import Settings を縦に分割
   - パネルを外部ウィンドウへ移す／戻す（アイコン、ウィンドウを閉じる、外部ウィンドウ自体をメインウィンドウの上へドラッグ）。各パネルはアプリ内に 1 つだけ。メインを閉じたら外部も閉じる
   - 表示名は英語（Devices / Windows / Thumbnails / Preview / Import Settings）。パネル操作はアイコン
@@ -76,7 +76,7 @@
 
 - 目的: 撮影日時・機種・ボディシリアル・評価を一覧に表示する。
 - 内容:
-  - 冒頭でメタデータ関連の事前検証（design.md §10）
+  - 冒頭でメタデータ関連の事前検証（architecture.md §10）
   - `-stay_open` の ExifTool の管理（起動・復旧・タイムアウト）
   - `read_range` で読んだ先頭バイトを stdin で渡す
   - プロファイルの `rating_tags` の順で評価を取得
@@ -116,7 +116,7 @@
 
 - 目的: ルールを設定し、コピー計画を事前に確認できるようにする。
 - 内容:
-  - テンプレート記法（design.md §9.2）と取り込み計画の計算を Rust（`seiton-core`）に実装し、UI のモック実装（TypeScript）を置き換える
+  - テンプレート記法（architecture.md §9.2）と取り込み計画の計算を Rust（`seiton-core`）に実装し、UI のモック実装（TypeScript）を置き換える
   - ルール: 条件（星・種類）と動作（保存する種類・種類ごとの保存先）
   - 衝突ポリシー: 上書き（デフォルト、同一内容はスキップ）/ スキップ / 連番
   - `TransferPlan` の生成、ルール編集 UI、計画プレビュー（ツリー・件数・上書き件数・必要容量）

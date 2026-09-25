@@ -1,6 +1,6 @@
 //! MTP/PTP implementation of DeviceSource (Windows WPD first).
 //!
-//! See `docs/design.md` for the overall architecture.
+//! See `docs/architecture.md` for the overall architecture.
 
 /// Name of this crate, used by the app to report which components are built in.
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");

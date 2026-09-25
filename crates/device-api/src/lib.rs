@@ -5,7 +5,7 @@
 //! as [`SourceCaps`] instead of branching on the transport. Sources are
 //! read-only by design: seiton never writes to the camera or card.
 //!
-//! See `docs/design.md` §4–5.
+//! See `docs/architecture.md` §4–5.
 
 mod path;
 mod source;

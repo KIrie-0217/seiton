@@ -1,7 +1,7 @@
 # Canon EOS / PowerShot.
 #
 # Folder layout and rating tags are based on documentation and must be
-# confirmed with real cards (docs/design.md §10, Task 4).
+# confirmed with real cards (docs/architecture.md §10, Task 4).
 schema_version = 1
 id = "canon"
 name = "Canon"

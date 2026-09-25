@@ -1,6 +1,6 @@
 //! Domain model, rating sync, rule engine and path templates (no IO).
 //!
-//! See `docs/design.md` for the overall architecture.
+//! See `docs/architecture.md` for the overall architecture.
 
 mod media;
 

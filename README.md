@@ -50,7 +50,7 @@ UI と Rust の間でやり取りする型は `src-tauri/src/dto.rs` で定義�
 
 ## ドキュメント
 
-- [設計書 (docs/design.md)](docs/design.md)
+- [設計書 (docs/architecture.md)](docs/architecture.md)
 - [実装計画 (docs/plan.md)](docs/plan.md)
 
 ## ライセンス

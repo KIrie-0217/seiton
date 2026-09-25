@@ -3,7 +3,7 @@
 //! Profiles are TOML files (`profiles/*.toml` bundled, plus the user's
 //! profile folder). They describe device matching, the folder layout, which
 //! extensions are RAW / JPEG / video, and where ratings are stored.
-//! See `docs/design.md` §6.
+//! See `docs/architecture.md` §6.
 
 mod def;
 mod profile;
