@@ -382,6 +382,15 @@ button {
 }
 
 /* Checkbox: drawn box + label. */
+/* Keeps React Aria's visually hidden <input> inside its label. Otherwise
+   it is positioned against a distant ancestor, and focusing it on click
+   scrolls the whole window. */
+.checkbox,
+.star-radio,
+.react-aria-Radio {
+  position: relative;
+}
+
 .checkbox {
   display: inline-flex;
   align-items: center;
@@ -552,6 +561,8 @@ button {
 /* ---- library layout ---- */
 
 .library {
+  /* The main window never scrolls as a whole; panes scroll inside. */
+  overflow: hidden;
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
