@@ -164,7 +164,7 @@ export function createBrowserHost(windowId: string): WindowHost {
       const left = window.screenX + window.outerWidth + 16;
       const features = `popup,width=${width},height=${height},left=${left},top=${window.screenY}`;
       const win = window.open(`${location.pathname}?pane=${kind}`, id, features);
-      if (!win) throw new Error("ポップアップがブロックされました。ブラウザでポップアップを許可してください。");
+      if (!win) throw new Error("popup-blocked");
       const callbacks: (() => void)[] = [];
       const timer = setInterval(() => {
         if (win.closed) {

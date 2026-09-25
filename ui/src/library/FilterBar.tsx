@@ -1,17 +1,11 @@
-import { useId } from "react";
+import { CheckboxGroup, Label } from "react-aria-components";
 import type { MediaKind } from "../api";
+import { Checkbox, SelectField } from "../controls";
+import { useI18n } from "../i18n";
 import { KIND_LABEL } from "./AssetGrid";
 import { FILTER_KINDS, type AssetFilter, type RatingFilter } from "./filter";
 
-const RATING_OPTIONS: { value: RatingFilter; label: string }[] = [
-  { value: "all", label: "すべて" },
-  { value: "unrated", label: "未評価のみ" },
-  { value: "1", label: "★1 以上" },
-  { value: "2", label: "★2 以上" },
-  { value: "3", label: "★3 以上" },
-  { value: "4", label: "★4 以上" },
-  { value: "5", label: "★5" },
-];
+const RATING_VALUES: RatingFilter[] = ["all", "unrated", "1", "2", "3", "4", "5"];
 
 interface FilterBarProps {
   filter: AssetFilter;
@@ -22,53 +16,41 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ filter, onChange, shown, total, selected }: FilterBarProps) {
-  const ratingId = useId();
-
-  function toggleKind(kind: MediaKind, on: boolean) {
-    const kinds = on ? [...filter.kinds, kind] : filter.kinds.filter((k) => k !== kind);
-    onChange({ ...filter, kinds });
-  }
+  const { t } = useI18n();
 
   return (
-    <div className="filter-bar" role="search" aria-label="絞り込み">
-      <label htmlFor={ratingId}>評価</label>
-      <select
-        id={ratingId}
+    <div className="filter-bar" role="search" aria-label={t.filter}>
+      <SelectField
+        className="inline"
+        label={t.rating}
         value={filter.rating}
-        onChange={(e) => onChange({ ...filter, rating: e.target.value as RatingFilter })}
+        options={RATING_VALUES.map((v) => ({ value: v, label: t.ratingFilter[v]! }))}
+        onChange={(rating) => onChange({ ...filter, rating })}
+      />
+
+      <CheckboxGroup
+        className="kind-filter"
+        value={filter.kinds}
+        onChange={(kinds) => onChange({ ...filter, kinds: kinds as MediaKind[] })}
       >
-        {RATING_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-
-      <fieldset className="kind-filter">
-        <legend>種類</legend>
+        <Label>{t.type}</Label>
         {FILTER_KINDS.map((kind) => (
-          <label key={kind}>
-            <input
-              type="checkbox"
-              checked={filter.kinds.includes(kind)}
-              onChange={(e) => toggleKind(kind, e.target.checked)}
-            />
+          <Checkbox key={kind} value={kind} className="chip">
             {KIND_LABEL[kind]}
-          </label>
+          </Checkbox>
         ))}
-      </fieldset>
+      </CheckboxGroup>
 
-      <label>
-        <input
-          type="checkbox"
-          checked={filter.hideImported}
-          onChange={(e) => onChange({ ...filter, hideImported: e.target.checked })}
-        />
-        取込済みを隠す
-      </label>
+      <Checkbox
+        className="chip"
+        isSelected={filter.hideImported}
+        onChange={(hideImported) => onChange({ ...filter, hideImported })}
+      >
+        {t.hideImported}
+      </Checkbox>
 
       <output className="filter-count" aria-live="polite">
-        {shown} / {total} 件{selected > 0 && `（${selected} 件選択）`}
+        {t.count(shown, total, selected)}
       </output>
     </div>
   );

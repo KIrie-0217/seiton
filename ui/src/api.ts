@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { AssetView } from "./bindings/AssetView";
 import type { DeviceView } from "./bindings/DeviceView";
 import type { FolderScan } from "./bindings/FolderScan";
@@ -111,8 +112,7 @@ export function getImportStatus(): Promise<ImportProgress | null> {
 /** Opens the OS folder picker. Only available inside the Tauri app. */
 export async function pickDirectory(title: string): Promise<string | null> {
   if (!isTauri()) return null;
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const picked = await open({ directory: true, multiple: false, title });
+  const picked = await openDialog({ directory: true, multiple: false, title });
   return typeof picked === "string" ? picked : null;
 }
 

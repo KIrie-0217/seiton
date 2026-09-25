@@ -1,253 +1,111 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent,
-  type RefObject,
-} from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import type { KeyboardEvent } from "react";
+import { GridLayout, GridList, GridListItem, Size, Virtualizer, type Selection } from "react-aria-components";
 import type { AssetView, MediaKind } from "../api";
+import { MESSAGES, useI18n } from "../i18n";
 import { useThumbnail } from "./queries";
 import { StarBar } from "./StarRating";
 
-const MIN_CELL_WIDTH = 180;
-const ROW_HEIGHT = 224;
-/** Used before the container has been measured (and in tests without layout). */
-const FALLBACK_WIDTH = 900;
+/** File type names: interface labels, the same in every locale. */
+export const KIND_LABEL: Record<MediaKind, string> = MESSAGES.en.kind as Record<MediaKind, string>;
 
-export const KIND_LABEL: Record<MediaKind, string> = {
-  raw: "RAW",
-  heif: "HEIF",
-  jpeg: "JPEG",
-  video: "動画",
-  sidecar: "XMP",
+const LAYOUT_OPTIONS = {
+  minItemSize: new Size(184, 214),
+  maxItemSize: new Size(260, 280),
+  minSpace: new Size(6, 10),
+  preserveAspectRatio: false,
 };
 
-function useElementWidth(ref: RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    setWidth(el.offsetWidth);
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setWidth(entry.contentRect.width);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [ref]);
-  return width;
-}
-
 function Thumbnail({ asset }: { asset: AssetView }) {
+  const { t } = useI18n();
   const { data, isError } = useThumbnail(asset.id);
-  if (isError) return <div className="thumb thumb-error">読み込めません</div>;
+  if (isError) return <div className="thumb thumb-error">{t.thumbError}</div>;
   if (!data) return <div className="thumb thumb-loading" aria-hidden="true" />;
   return <img className="thumb" src={data} alt="" draggable={false} />;
 }
 
 export interface AssetGridProps {
   assets: AssetView[];
-  /** Index (into `assets`) of the cell that has keyboard focus. */
-  activeIndex: number;
   selectedIds: ReadonlySet<string>;
-  onActivate: (index: number, mode: "replace" | "toggle" | "focus-only") => void;
-  onToggleSelection: (index: number) => void;
-  /** Rating shortcut (0 clears, 1–5 set) for the current selection. */
-  onRate: (rating: number | null) => void;
-  /** Rating set by clicking the stars of one cell (that asset only). */
+  /** New selection, and the frame that has focus (if any). */
+  onSelectionChange: (ids: string[], focusedId: string | null) => void;
+  /** 0–5 pressed on the grid: rate the selection, or the focused frame. */
+  onRateKey: (rating: number | null, focusedId: string | null) => void;
+  /** Stars pressed on one frame (that asset only). */
   onRateAsset: (asset: AssetView, rating: number | null) => void;
-  onOpen?: (index: number) => void;
+  /** Frame number of each asset on the device (position in the full list). */
+  frameNumbers: ReadonlyMap<string, number>;
+}
+
+/** The asset id of the row that currently holds focus. */
+function focusedKey(): string | null {
+  const el = document.activeElement?.closest<HTMLElement>("[role=row][data-key]");
+  return el?.dataset.key ?? null;
 }
 
 /**
- * Virtualized thumbnail grid following the ARIA grid pattern: arrow keys
- * move focus (roving tabindex), Space toggles selection and 0–5 rate the
- * selection. Only visible rows are rendered, so large cards stay fast.
+ * The contact sheet: a virtualized React Aria GridList laid out as a grid.
+ * React Aria provides arrow / Home / End / PageUp / PageDown navigation,
+ * selection (click, Ctrl/⌘-click, Shift-click, Space, Ctrl+A) and type-ahead;
+ * seiton adds 0–5 for ratings.
  */
-export function AssetGrid({
-  assets,
-  activeIndex,
-  selectedIds,
-  onActivate,
-  onToggleSelection,
-  onRate,
-  onRateAsset,
-  onOpen,
-}: AssetGridProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const measured = useElementWidth(scrollRef);
-  const width = measured > 0 ? measured : FALLBACK_WIDTH;
-  const columns = Math.max(1, Math.floor(width / MIN_CELL_WIDTH));
-  const rowCount = Math.ceil(assets.length / columns);
+export function AssetGrid({ assets, selectedIds, onSelectionChange, onRateKey, onRateAsset, frameNumbers }: AssetGridProps) {
+  const { t } = useI18n();
 
-  // TanStack Virtual is not React Compiler compatible; the component is
-  // intentionally left unmemoized (see eslint react-hooks/incompatible-library).
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 2,
-    initialRect: { width: FALLBACK_WIDTH, height: 3 * ROW_HEIGHT },
-  });
+  function change(keys: Selection) {
+    const ids = keys === "all" ? assets.map((a) => a.id) : [...keys].map(String);
+    onSelectionChange(ids, focusedKey());
+  }
 
-  // Keyboard navigation scrolls the active cell into view, then focuses it
-  // once its row has been rendered.
-  const pendingFocus = useRef(false);
-  const virtualItems = virtualizer.getVirtualItems();
-  useEffect(() => {
-    if (!pendingFocus.current) return;
-    const cell = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
-    if (cell) {
-      cell.focus({ preventScroll: true });
-      pendingFocus.current = false;
-    }
-  }, [activeIndex, virtualItems]);
-
-  const moveTo = useCallback(
-    (index: number, extend: boolean) => {
-      if (assets.length === 0) return;
-      const next = Math.min(assets.length - 1, Math.max(0, index));
-      pendingFocus.current = true;
-      virtualizer.scrollToIndex(Math.floor(next / columns), { align: "auto" });
-      onActivate(next, extend ? "focus-only" : "replace");
-    },
-    [assets.length, columns, onActivate, virtualizer],
-  );
-
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const i = activeIndex;
-    const ctrl = e.ctrlKey || e.metaKey;
-    const pageRows = Math.max(1, Math.floor((scrollRef.current?.clientHeight || 3 * ROW_HEIGHT) / ROW_HEIGHT));
-    const rowStart = i - (i % columns);
-    let target: number;
-    switch (e.key) {
-      case "ArrowRight":
-        target = i + 1;
-        break;
-      case "ArrowLeft":
-        target = i - 1;
-        break;
-      case "ArrowDown":
-        target = i + columns < assets.length ? i + columns : i;
-        break;
-      case "ArrowUp":
-        target = i - columns >= 0 ? i - columns : i;
-        break;
-      case "Home":
-        target = ctrl ? 0 : rowStart;
-        break;
-      case "End":
-        target = ctrl ? assets.length - 1 : Math.min(assets.length - 1, rowStart + columns - 1);
-        break;
-      case "PageDown":
-        target = Math.min(assets.length - 1, i + pageRows * columns);
-        break;
-      case "PageUp":
-        target = Math.max(0, i - pageRows * columns);
-        break;
-      case " ":
-        e.preventDefault();
-        onToggleSelection(i);
-        return;
-      case "Enter":
-        e.preventDefault();
-        onOpen?.(i);
-        return;
-      default:
-        if (/^[0-5]$/.test(e.key) && !ctrl && !e.altKey) {
-          e.preventDefault();
-          const n = Number(e.key);
-          onRate(n === 0 ? null : n);
-        }
-        return;
-    }
+  function onKeyDown(e: KeyboardEvent) {
+    if (!/^[0-5]$/.test(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
-    moveTo(target, ctrl);
-  }
-
-  function onCellClick(e: MouseEvent, index: number) {
-    onActivate(index, e.ctrlKey || e.metaKey ? "toggle" : "replace");
-  }
-
-  if (assets.length === 0) {
-    return <p className="grid-empty">条件に一致する写真・動画はありません。</p>;
+    e.stopPropagation();
+    const n = Number(e.key);
+    onRateKey(n === 0 ? null : n, focusedKey());
   }
 
   return (
-    <div
-      ref={scrollRef}
-      className="asset-grid"
-      role="grid"
-      aria-label="写真と動画"
-      aria-multiselectable="true"
-      aria-rowcount={rowCount}
-      aria-colcount={columns}
-      onKeyDown={onKeyDown}
-    >
-      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-        {virtualItems.map((row) => {
-          const start = row.index * columns;
-          const rowAssets = assets.slice(start, start + columns);
-          return (
-            <div
-              key={row.key}
-              role="row"
-              aria-rowindex={row.index + 1}
-              className="asset-row"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: row.size,
-                transform: `translateY(${row.start}px)`,
-                gridTemplateColumns: `repeat(${columns}, 1fr)`,
-              }}
-            >
-              {rowAssets.map((asset, col) => {
-                const index = start + col;
-                const selected = selectedIds.has(asset.id);
-                return (
-                  <div
-                    key={asset.id}
-                    role="gridcell"
-                    aria-colindex={col + 1}
-                    aria-selected={selected}
-                    data-index={index}
-                    tabIndex={index === activeIndex ? 0 : -1}
-                    className={`asset-cell${selected ? " selected" : ""}`}
-                    onClick={(e) => onCellClick(e, index)}
-                    onDoubleClick={() => onOpen?.(index)}
-                    onFocus={() => {
-                      if (index !== activeIndex) onActivate(index, "focus-only");
-                    }}
-                  >
-                    <Thumbnail asset={asset} />
-                    <div className="cell-caption">
-                      <span className="cell-name">{asset.name}</span>
-                      <div className="cell-badges">
-                        {asset.files.map((f) => (
-                          <span key={f.path} className={`badge kind-${f.kind}`}>
-                            {KIND_LABEL[f.kind]}
-                          </span>
-                        ))}
-                        {asset.imported && <span className="badge imported">取込済</span>}
-                      </div>
-                    </div>
-                    <StarBar name={asset.name} rating={asset.rating} onRate={(r) => onRateAsset(asset, r)} />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+    // Capture digits before GridList's type-ahead sees them.
+    <div className="asset-grid-wrap" onKeyDownCapture={onKeyDown}>
+      <Virtualizer layout={GridLayout} layoutOptions={LAYOUT_OPTIONS}>
+        <GridList
+          className="asset-grid"
+          aria-label={t.frames}
+          layout="grid"
+          items={assets}
+          selectionMode="multiple"
+          selectionBehavior="replace"
+          selectedKeys={selectedIds as Set<string>}
+          onSelectionChange={change}
+          renderEmptyState={() => <p className="grid-empty">{t.noMatches}</p>}
+        >
+          {(asset) => {
+            const frame = frameNumbers.get(asset.id) ?? 0;
+            return (
+              <GridListItem
+                id={asset.id}
+                className="asset-cell"
+                textValue={`${asset.name}, ${t.frameNumber(frame)}`}
+              >
+                <div className="frame">
+                  <Thumbnail asset={asset} />
+                </div>
+                <div className="frame-strip">
+                  <span className="frame-number" aria-hidden="true">
+                    {String(frame).padStart(3, "0")}
+                  </span>
+                  <span className="cell-name">{asset.name}</span>
+                  <span className="cell-kinds">{asset.files.map((f) => KIND_LABEL[f.kind]).join(" · ")}</span>
+                </div>
+                <div className="frame-marks">
+                  <StarBar name={asset.name} rating={asset.rating} onRate={(r) => onRateAsset(asset, r)} />
+                  {asset.imported && <span className="imported-mark">{t.imported}</span>}
+                </div>
+              </GridListItem>
+            );
+          }}
+        </GridList>
+      </Virtualizer>
     </div>
   );
 }

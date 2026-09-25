@@ -46,21 +46,21 @@ describe("FolderBrowser", () => {
     });
     render(<FolderBrowser />);
 
-    await userEvent.click(screen.getByRole("button", { name: "フォルダを選択…" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose folder…" }));
 
-    expect(await screen.findByText(/EOS_DIGITAL（プロファイル: Canon）: 2 件/)).toBeInTheDocument();
+    expect(await screen.findByText("EOS_DIGITAL (profile: Canon): 2 shots")).toBeInTheDocument();
     expect(scannedPath).toBe("/Volumes/EOS_DIGITAL");
     const row = screen.getByRole("row", { name: /IMG_0001/ });
-    expect(within(row).getByText("RAW + JPEG")).toBeInTheDocument();
+    expect(within(row).getByText("RAW + JPG")).toBeInTheDocument();
     expect(within(row).getByText("IMG_0001.CR3")).toBeInTheDocument();
-    expect(screen.getByText("動画")).toBeInTheDocument();
+    expect(screen.getByText("Video")).toBeInTheDocument();
   });
 
   it("does nothing when the dialog is cancelled", async () => {
     const calls = mockBackend(() => SCAN, null);
     render(<FolderBrowser />);
 
-    await userEvent.click(screen.getByRole("button", { name: "フォルダを選択…" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose folder…" }));
 
     expect(calls).toEqual(["plugin:dialog|open"]);
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -72,7 +72,7 @@ describe("FolderBrowser", () => {
     });
     render(<FolderBrowser />);
 
-    await userEvent.click(screen.getByRole("button", { name: "フォルダを選択…" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose folder…" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("not found: /Volumes/X");
   });

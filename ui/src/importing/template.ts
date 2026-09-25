@@ -1,4 +1,5 @@
-import type { FolderSettings, ImportSettings, MediaKind, SaveFormats, SimpleFolders } from "../api";
+import type { FolderSettings, ImportSettings, MediaKind, SimpleFolders } from "../api";
+import type { TemplateErrorCode } from "../i18n";
 
 /**
  * Folder templates.
@@ -9,23 +10,24 @@ import type { FolderSettings, ImportSettings, MediaKind, SaveFormats, SimpleFold
  * literal). File names are always kept as on the card.
  */
 
+/** Variables, with an example value. Descriptions live in i18n. */
 export const TEMPLATE_VARIABLES = [
-  { token: "yyyy", label: "年（4 桁）", example: "2026" },
-  { token: "yy", label: "年（2 桁）", example: "26" },
-  { token: "MM", label: "月", example: "09" },
-  { token: "dd", label: "日", example: "20" },
-  { token: "HH", label: "時（24 時間）", example: "10" },
-  { token: "mm", label: "分", example: "15" },
-  { token: "ss", label: "秒", example: "30" },
-  { token: "star", label: "星の数（未評価は 0）", example: "3" },
-  { token: "file", label: "ファイル形式（RAW / JPG / HEIF / VIDEO / META）", example: "RAW" },
+  { token: "yyyy", example: "2026" },
+  { token: "yy", example: "26" },
+  { token: "MM", example: "09" },
+  { token: "dd", example: "20" },
+  { token: "HH", example: "10" },
+  { token: "mm", example: "15" },
+  { token: "ss", example: "30" },
+  { token: "star", example: "3" },
+  { token: "file", example: "RAW" },
 ] as const;
 
 export type TemplateToken = (typeof TEMPLATE_VARIABLES)[number]["token"];
 
 export type TemplatePart = { type: "text"; value: string } | { type: "token"; token: TemplateToken };
 
-export type ParsedTemplate = { ok: true; segments: TemplatePart[][] } | { ok: false; error: string };
+export type ParsedTemplate = { ok: true; segments: TemplatePart[][] } | { ok: false; error: TemplateErrorCode };
 
 const TOKENS = new Set<string>(TEMPLATE_VARIABLES.map((v) => v.token));
 // Characters Windows does not allow in names, plus `\` (use `/` between folders).
@@ -41,7 +43,7 @@ export const FILE_FOLDER: Record<MediaKind, string> = {
   sidecar: "META",
 };
 
-function fail(error: string): ParsedTemplate {
+function fail(error: TemplateErrorCode): ParsedTemplate {
   return { ok: false, error };
 }
 
@@ -50,7 +52,7 @@ export function parseTemplate(template: string): ParsedTemplate {
   for (const raw of template.split("/")) {
     const name = raw.trim() === "" ? "" : raw;
     if (name === "") continue;
-    if (name === "." || name === "..") return fail(`フォルダ名「${name}」は使えません`);
+    if (name === "." || name === "..") return fail({ code: "dotSegment", name });
     const parts: TemplatePart[] = [];
     let text = "";
     let i = 0;
@@ -58,24 +60,24 @@ export function parseTemplate(template: string): ParsedTemplate {
       const ch = name[i]!;
       if (ch === "{") {
         const end = name.indexOf("}", i);
-        if (end < 0) return fail("「{」が閉じていません");
+        if (end < 0) return fail({ code: "unclosedBrace" });
         const token = name.slice(i + 1, end);
-        if (!TOKENS.has(token)) return fail(`不明な変数 {${token}} があります`);
+        if (!TOKENS.has(token)) return fail({ code: "unknownVariable", token });
         if (text) parts.push({ type: "text", value: text });
         text = "";
         parts.push({ type: "token", token: token as TemplateToken });
         i = end + 1;
         continue;
       }
-      if (ch === "}") return fail("対応する「{」のない「}」があります");
+      if (ch === "}") return fail({ code: "strayBrace" });
       if (FORBIDDEN.test(ch) || CONTROL.test(ch)) {
-        return fail(ch === "\\" ? "フォルダの区切りには「/」を使ってください" : `フォルダ名に使えない文字「${ch}」があります`);
+        return fail(ch === "\\" ? { code: "backslash" } : { code: "forbiddenChar", char: ch });
       }
       text += ch;
       i += 1;
     }
     if (text) parts.push({ type: "text", value: text });
-    if (/[. ]$/.test(name)) return fail("フォルダ名の末尾に「.」や空白は使えません");
+    if (/[. ]$/.test(name)) return fail({ code: "trailingDotOrSpace" });
     segments.push(parts);
   }
   return { ok: true, segments };
@@ -123,14 +125,6 @@ export function joinPath(root: string, folders: string[], fileName: string): str
   const base = root.replace(/[\\/]+$/, "");
   return [base, ...folders, fileName].join(sep);
 }
-
-export const RATING_LABELS = ["未評価", "★1", "★2", "★3", "★4", "★5"] as const;
-
-export const SAVE_FORMAT_LABELS: Record<SaveFormats, string> = {
-  rawOnly: "RAW のみ",
-  rawAndJpeg: "JPG + RAW",
-  jpegOnly: "JPG のみ",
-};
 
 export const DEFAULT_IMPORT_SETTINGS: ImportSettings = {
   formats: {

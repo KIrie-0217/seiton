@@ -1,186 +1,151 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createTestDesktop } from "../test/desktop";
+import { chooseOption, frame, selectTrigger, installFakeLayout } from "../test/helpers";
 
-// jsdom has no layout; give elements a size so the virtualizer renders rows.
-const WIDTH = 900; // 5 columns of >= 180px
-const HEIGHT = 600; // 3 rows of 200px visible
-const originals = {
-  offsetWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth"),
-  offsetHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight"),
-};
+installFakeLayout();
 
-beforeAll(() => {
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => WIDTH });
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => HEIGHT });
-});
-
-afterAll(() => {
-  for (const [key, descriptor] of Object.entries(originals)) {
-    if (descriptor) Object.defineProperty(HTMLElement.prototype, key, descriptor);
-  }
-});
-
-async function setup() {
+async function setup(options?: Parameters<typeof createTestDesktop>[0]) {
   const user = userEvent.setup();
-  const desktop = createTestDesktop();
-  const main = within(desktop.main.view.container);
-  const grid = await main.findByRole("grid", { name: "写真と動画" });
+  const desktop = createTestDesktop(options);
+  const main = desktop.main.view.container;
+  const grid = await within(main).findByRole("grid", { name: "Frames" });
   const mainAssets = () => desktop.data.assets.get("mock:mtp:eos-r6m2")!;
   return { user, desktop, main, grid, mainAssets };
 }
 
-function cell(grid: HTMLElement, name: string) {
-  return within(grid).getByRole("gridcell", { name: new RegExp(`^${name}`) });
+function starsOf(root: HTMLElement, name: string) {
+  return within(frame(root, name)).getByRole("group", { name: /^(Unrated|\d stars?)$/ });
 }
 
 describe("Library (mock backend)", () => {
-  it("lists devices and shows the first device's assets virtualized", async () => {
-    const { main, grid } = await setup();
+  it("lists devices and shows the first device's frames", async () => {
+    const { main } = await setup();
+    const devices = within(main).getByRole("listbox", { name: "Devices" });
+    const options = within(devices).getAllByRole("option");
+    expect(options[0]).toHaveTextContent("Canon EOS R6 Mark II");
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    expect(options[1]).toHaveTextContent("SD card");
+    expect(within(main).getByText("50 of 50")).toBeInTheDocument();
+    await waitFor(() => expect(main.querySelector("img.thumb")).not.toBeNull());
+  });
 
-    const nav = main.getByRole("navigation", { name: "デバイス" });
-    expect(within(nav).getByRole("button", { name: /Canon EOS R6 Mark II/ })).toHaveAttribute("aria-current", "true");
-    expect(within(nav).getByRole("button", { name: /EOS_DIGITAL/ })).toHaveTextContent("SD カード");
-
-    expect(main.getByText("50 / 50 件")).toBeInTheDocument();
-    expect(grid).toHaveAttribute("aria-colcount", "5");
-    expect(grid).toHaveAttribute("aria-rowcount", "10");
-    const rendered = within(grid).getAllByRole("gridcell").length;
-    expect(rendered).toBeGreaterThan(0);
-    expect(rendered).toBeLessThan(50);
-    await waitFor(() => expect(grid.querySelector("img.thumb")).not.toBeNull());
+  it("numbers frames like a contact sheet", async () => {
+    const { main, mainAssets } = await setup();
+    const first = mainAssets()[0]!;
+    expect(frame(main, first.name)).toHaveTextContent("001");
+    expect(frame(main, first.name)).toHaveAccessibleName(`${first.name}, Frame 1`);
   });
 
   it("switches devices", async () => {
     const { user, main } = await setup();
-    await user.click(main.getByRole("button", { name: /EOS_DIGITAL/ }));
-    expect(await main.findByText("8 / 8 件")).toBeInTheDocument();
+    await user.click(within(main).getByRole("option", { name: /EOS_DIGITAL/ }));
+    expect(await within(main).findByText("8 of 8")).toBeInTheDocument();
   });
 
-  it("moves focus with arrow keys and rates with number keys", async () => {
-    const { user, main, grid, mainAssets } = await setup();
-    const [first, second, , , , sixth] = mainAssets();
+  it("selects with click and arrows, and rates with number keys", async () => {
+    const { user, main, mainAssets } = await setup();
+    const [first, second] = mainAssets();
 
-    await user.click(cell(grid, first!.name));
-    expect(cell(grid, first!.name)).toHaveFocus();
-    expect(cell(grid, first!.name)).toHaveAttribute("aria-selected", "true");
+    await user.click(within(frame(main, first!.name)).getByText(first!.name));
+    expect(frame(main, first!.name)).toHaveAttribute("aria-selected", "true");
 
     await user.keyboard("{ArrowRight}");
-    expect(cell(grid, second!.name)).toHaveFocus();
-    expect(cell(grid, second!.name)).toHaveAttribute("aria-selected", "true");
-    expect(cell(grid, first!.name)).toHaveAttribute("aria-selected", "false");
-
-    await user.keyboard("{ArrowLeft}{ArrowDown}");
-    expect(cell(grid, sixth!.name)).toHaveFocus();
+    expect(frame(main, second!.name)).toHaveFocus();
+    expect(frame(main, second!.name)).toHaveAttribute("aria-selected", "true");
+    expect(frame(main, first!.name)).toHaveAttribute("aria-selected", "false");
 
     await user.keyboard("4");
-    await waitFor(() =>
-      expect(within(cell(grid, sixth!.name)).getByRole("group", { name: "評価 4" })).toBeInTheDocument(),
-    );
-    const detail = main.getByRole("complementary", { name: "詳細" });
-    expect(within(detail).getByRole("radio", { name: "★4" })).toBeChecked();
+    await waitFor(() => expect(starsOf(main, second!.name)).toHaveAccessibleName("4 stars"));
+    const detail = within(main).getByRole("complementary", { name: "Details" });
+    expect(within(detail).getByRole("radio", { name: "4 stars" })).toBeChecked();
     expect(within(detail).getByText("seiton")).toBeInTheDocument();
 
     await user.keyboard("0");
-    await waitFor(() =>
-      expect(within(cell(grid, sixth!.name)).getByRole("group", { name: "評価なし" })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(starsOf(main, second!.name)).toHaveAccessibleName("Unrated"));
   });
 
-  it("rates a multi-selection from the preview pane", async () => {
-    const { user, main, grid, mainAssets } = await setup();
+  it("rates a multi-selection from the preview", async () => {
+    const { user, main, mainAssets } = await setup();
     const [first, second, third] = mainAssets();
 
-    await user.click(cell(grid, first!.name));
-    await user.keyboard("{Control>}{ArrowRight}{/Control} ");
-    await user.keyboard("{Control>}{ArrowRight}{/Control} ");
-    expect(main.getByText(/（3 件選択）/)).toBeInTheDocument();
+    await user.click(within(frame(main, first!.name)).getByText(first!.name));
+    await user.keyboard("{Shift>}{ArrowRight}{ArrowRight}{/Shift}");
+    expect(within(main).getByText("50 of 50 · 3 selected")).toBeInTheDocument();
 
-    const detail = main.getByRole("complementary", { name: "詳細" });
-    expect(within(detail).getByRole("heading", { name: "3 件を選択中" })).toBeInTheDocument();
-    await user.click(within(detail).getByRole("radio", { name: "★5" }));
+    const detail = within(main).getByRole("complementary", { name: "Details" });
+    expect(within(detail).getByRole("heading", { name: "3 selected" })).toBeInTheDocument();
+    await user.click(within(detail).getByRole("radio", { name: "5 stars" }));
 
     for (const a of [first, second, third]) {
-      await waitFor(() =>
-        expect(within(cell(grid, a!.name)).getByRole("group", { name: "評価 5" })).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(starsOf(main, a!.name)).toHaveAccessibleName("5 stars"));
     }
   });
 
   it("lights stars up to the pointer like a gauge", async () => {
-    const { user, grid, mainAssets } = await setup();
+    const { user, main, mainAssets } = await setup();
     const target = mainAssets().find((a) => a.rating === null)!;
-    const bar = within(cell(grid, target.name)).getByRole("group", { name: "評価なし" });
-    const lit = () => within(bar).getAllByRole("button").map((b) => b.classList.contains("lit"));
+    const bar = starsOf(main, target.name);
+    const lit = () => within(bar).getAllByRole("button").map((b) => b.hasAttribute("data-lit"));
 
     expect(lit()).toEqual([false, false, false, false, false]);
-    await user.hover(within(bar).getByRole("button", { name: `${target.name} を★3にする` }));
+    await user.hover(within(bar).getByRole("button", { name: `Rate ${target.name} 3 stars` }));
     expect(lit()).toEqual([true, true, true, false, false]);
     await user.unhover(bar);
     expect(lit()).toEqual([false, false, false, false, false]);
-
-    await user.click(within(bar).getByRole("button", { name: `${target.name} を★3にする` }));
-    await user.unhover(bar);
-    await waitFor(() => expect(lit()).toEqual([true, true, true, false, false]));
   });
 
-  it("rates a single cell by clicking its stars without changing the selection", async () => {
-    const { user, main, grid, mainAssets } = await setup();
+  it("rates one frame from its stars without changing the selection", async () => {
+    const { user, main, mainAssets } = await setup();
     const [first, second] = mainAssets();
 
-    await user.click(cell(grid, first!.name));
-    await user.click(within(cell(grid, second!.name)).getByRole("button", { name: `${second!.name} を★4にする` }));
+    await user.click(within(frame(main, first!.name)).getByText(first!.name));
+    await user.click(within(frame(main, second!.name)).getByRole("button", { name: `Rate ${second!.name} 4 stars` }));
 
-    await waitFor(() =>
-      expect(within(cell(grid, second!.name)).getByRole("group", { name: "評価 4" })).toBeInTheDocument(),
-    );
-    // Only the clicked asset changed; the selection stayed on the first one.
-    expect(cell(grid, first!.name)).toHaveAttribute("aria-selected", "true");
-    expect(cell(grid, second!.name)).toHaveAttribute("aria-selected", "false");
-    expect(main.getByRole("complementary", { name: "詳細" })).toHaveTextContent(first!.name);
+    await waitFor(() => expect(starsOf(main, second!.name)).toHaveAccessibleName("4 stars"));
+    expect(frame(main, first!.name)).toHaveAttribute("aria-selected", "true");
+    expect(frame(main, second!.name)).toHaveAttribute("aria-selected", "false");
 
-    // Clicking the current rating clears it.
-    await user.click(within(cell(grid, second!.name)).getByRole("button", { name: `${second!.name} の評価を解除` }));
-    await waitFor(() =>
-      expect(within(cell(grid, second!.name)).getByRole("group", { name: "評価なし" })).toBeInTheDocument(),
-    );
+    // Pressing the current rating clears it.
+    await user.click(within(frame(main, second!.name)).getByRole("button", { name: `Clear rating of ${second!.name}` }));
+    await waitFor(() => expect(starsOf(main, second!.name)).toHaveAccessibleName("Unrated"));
   });
 
-  it("filters by minimum rating and kind", async () => {
-    const { user, main, grid, mainAssets } = await setup();
+  it("filters by minimum rating, type and import state", async () => {
+    const { user, main, mainAssets } = await setup();
     const assets = mainAssets();
 
-    await user.selectOptions(main.getByLabelText("評価"), "3");
+    await chooseOption(user, main, "Rating", "3+ stars");
     const min3 = assets.filter((a) => (a.rating ?? 0) >= 3);
-    expect(main.getByText(`${min3.length} / 50 件`)).toBeInTheDocument();
-    for (const c of within(grid).getAllByRole("gridcell")) {
-      const stars = within(c).getByRole("group", { name: /評価/ }).getAttribute("aria-label")!;
-      expect(Number(stars.replace("評価 ", ""))).toBeGreaterThanOrEqual(3);
-    }
+    expect(within(main).getByText(`${min3.length} of 50`)).toBeInTheDocument();
+    expect(selectTrigger(main, "Rating")).toHaveTextContent("3+ stars");
 
-    await user.selectOptions(main.getByLabelText("評価"), "all");
-    await user.click(main.getByRole("checkbox", { name: "動画" }));
+    await chooseOption(user, main, "Rating", "All");
+    await user.click(within(main).getByRole("checkbox", { name: "Video" }));
     const videos = assets.filter((a) => a.files.some((f) => f.kind === "video"));
-    expect(main.getByText(`${videos.length} / 50 件`)).toBeInTheDocument();
+    expect(within(main).getByText(`${videos.length} of 50`)).toBeInTheDocument();
 
-    await user.click(main.getByRole("checkbox", { name: "取込済みを隠す" }));
+    await user.click(within(main).getByRole("checkbox", { name: "Hide imported" }));
     const notImported = videos.filter((a) => !a.imported);
-    expect(main.getByText(`${notImported.length} / 50 件`)).toBeInTheDocument();
+    expect(within(main).getByText(`${notImported.length} of 50`)).toBeInTheDocument();
   });
 
   it("shows an empty state when nothing matches", async () => {
-    const user = userEvent.setup();
-    const desktop = createTestDesktop({
+    const { user, main } = await setup({
       prepare: (data) => data.assets.get("mock:mtp:eos-r6m2")!.forEach((a) => (a.rating = null)),
     });
-    const main = within(desktop.main.view.container);
-    await main.findByRole("grid");
+    await chooseOption(user, main, "Rating", "5 stars");
+    expect(within(main).getByText("0 of 50")).toBeInTheDocument();
+    expect(within(main).getByText("No frames match the filter.")).toBeInTheDocument();
+  });
 
-    await user.selectOptions(main.getByLabelText("評価"), "5");
-
-    expect(main.getByText("0 / 50 件")).toBeInTheDocument();
-    expect(main.getByText("条件に一致する写真・動画はありません。")).toBeInTheDocument();
-    expect(main.queryByRole("grid")).not.toBeInTheDocument();
+  it("switches supplementary text to Japanese and keeps English labels", async () => {
+    const { user, main } = await setup();
+    await chooseOption(user, main, "Language", "日本語");
+    expect(within(main).getByText(/矢印キーで移動/)).toBeInTheDocument();
+    expect(within(main).getByRole("listbox", { name: "Devices" })).toBeInTheDocument();
+    expect(within(main).getByRole("region", { name: "Thumbnails" })).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("ja");
   });
 });

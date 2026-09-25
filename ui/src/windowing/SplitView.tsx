@@ -38,7 +38,7 @@ export function SplitView({
   second,
   direction = "row",
   defaultRatio = 65,
-  label = "パネルの境界",
+  label = "Resize panes",
   storageKey = "seiton.split.ratio",
 }: SplitViewProps) {
   const [ratio, setRatio] = useState(() => loadRatio(storageKey, defaultRatio));

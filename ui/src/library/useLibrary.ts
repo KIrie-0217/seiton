@@ -3,8 +3,6 @@ import type { AssetView } from "../api";
 import { useWorkspace } from "../windowing/Workspace";
 import { useAssets, useDevices, useSetRating } from "./queries";
 
-export type ActivateMode = "replace" | "toggle" | "focus-only";
-
 /**
  * Library data plus the selection shared by every pane and window.
  * Selection is stored as asset ids so panes with different filters agree.
@@ -20,23 +18,24 @@ export function useLibrary() {
   const all = useMemo(() => assets.data ?? [], [assets.data]);
   const selectedSet = useMemo(() => new Set(shared.selectedIds), [shared.selectedIds]);
   const selected = useMemo(() => all.filter((a) => selectedSet.has(a.id)), [all, selectedSet]);
-  const active = useMemo(() => all.find((a) => a.id === shared.activeId), [all, shared.activeId]);
+  // Without a focused frame, Preview shows the first one instead of blank paper.
+  const active = useMemo(() => all.find((a) => a.id === shared.activeId) ?? all[0], [all, shared.activeId]);
 
   const selectDevice = useCallback(
     (id: string) => updateShared({ deviceId: id, selectedIds: [], activeId: null }),
     [updateShared],
   );
 
-  const activate = useCallback(
-    (asset: AssetView, mode: ActivateMode) =>
-      updateShared((prev) => {
-        if (mode === "focus-only") return { activeId: asset.id };
-        if (mode === "replace") return { activeId: asset.id, selectedIds: [asset.id] };
-        const ids = prev.selectedIds.includes(asset.id)
-          ? prev.selectedIds.filter((id) => id !== asset.id)
-          : [...prev.selectedIds, asset.id];
-        return { activeId: asset.id, selectedIds: ids };
-      }),
+  /**
+   * Sets the selection. The focused frame (or, without one, the last
+   * selected frame) becomes the active frame shown in Preview.
+   */
+  const select = useCallback(
+    (ids: string[], focusedId: string | null) =>
+      updateShared((prev) => ({
+        selectedIds: ids,
+        activeId: focusedId ?? ids[ids.length - 1] ?? prev.activeId,
+      })),
     [updateShared],
   );
 
@@ -62,7 +61,7 @@ export function useLibrary() {
     active,
     targets,
     selectDevice,
-    activate,
+    select,
     setRating,
     rate,
   };

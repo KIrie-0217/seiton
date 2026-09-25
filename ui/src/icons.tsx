@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 /** 16px line icons (stroke = currentColor). Decorative: the button has the label. */
 function Svg({ children }: { children: ReactNode }) {
@@ -75,22 +75,37 @@ export const ImportIcon = () => (
   </Svg>
 );
 
-interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "aria-label"> {
-  /** Accessible name, also shown as a tooltip. */
-  label: string;
-  icon: ReactNode;
-}
+const STAR_PATH = "M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6Z";
 
-export function IconButton({ label, icon, className, title, ...rest }: IconButtonProps) {
+/** Star mark for ratings: filled when `on`, outline otherwise. */
+export function StarIcon({ on, size = 16 }: { on: boolean; size?: number }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={title ?? label}
-      className={`icon-button${className ? ` ${className}` : ""}`}
-      {...rest}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+      fill={on ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinejoin="round"
     >
-      {icon}
-    </button>
+      <path d={STAR_PATH} />
+    </svg>
   );
 }
+
+/** Slash through a circle: clear rating. */
+export const ClearIcon = () => (
+  <Svg>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M4.2 11.8 11.8 4.2" />
+  </Svg>
+);
+
+export const ChevronIcon = () => (
+  <Svg>
+    <path d="M4.5 6.5 8 10l3.5-3.5" />
+  </Svg>
+);

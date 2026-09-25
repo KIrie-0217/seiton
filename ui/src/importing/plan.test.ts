@@ -15,7 +15,7 @@ const ctx: TemplateContext = { captureTime: "2026-09-20T10:15:30", stars: 3, kin
 
 function render(template: string, c = ctx) {
   const parsed = parseTemplate(template);
-  if (!parsed.ok) throw new Error(parsed.error);
+  if (!parsed.ok) throw new Error(parsed.error.code);
   return renderFolders(parsed.segments, c);
 }
 
@@ -42,17 +42,15 @@ describe("parseTemplate / renderFolders", () => {
   });
 
   it.each([
-    ["{foo}", "不明な変数 {foo}"],
-    ["{yyyy", "閉じていません"],
-    ["a}", "「}」"],
-    ["a\\b", "「/」"],
-    ["a:b", "使えない文字「:」"],
-    ["../x", "「..」"],
-    ["photos.", "末尾"],
-  ])("rejects %s", (template, message) => {
-    const parsed = parseTemplate(template);
-    expect(parsed.ok).toBe(false);
-    if (!parsed.ok) expect(parsed.error).toContain(message);
+    ["{foo}", { code: "unknownVariable", token: "foo" }],
+    ["{yyyy", { code: "unclosedBrace" }],
+    ["a}", { code: "strayBrace" }],
+    ["a\\b", { code: "backslash" }],
+    ["a:b", { code: "forbiddenChar", char: ":" }],
+    ["../x", { code: "dotSegment", name: ".." }],
+    ["photos.", { code: "trailingDotOrSpace" }],
+  ])("rejects %s", (template, error) => {
+    expect(parseTemplate(template)).toEqual({ ok: false, error });
   });
 });
 
@@ -142,8 +140,10 @@ describe("planImport", () => {
       folders: { ...DEFAULT_IMPORT_SETTINGS.folders, mode: "advanced", template: "{nope}" },
     };
     const plan = planImport([asset("a", 3, ["raw"])], bad, { ...everything, media: [] });
-    expect(plan.problems.join("\n")).toMatch(/保存先フォルダ/);
-    expect(plan.problems.join("\n")).toMatch(/フォルダ構成/);
-    expect(plan.problems.join("\n")).toMatch(/メディア形式/);
+    expect(plan.problems).toEqual([
+      { code: "noDestination" },
+      { code: "badTemplate", error: { code: "unknownVariable", token: "nope" } },
+      { code: "noMedia" },
+    ]);
   });
 });

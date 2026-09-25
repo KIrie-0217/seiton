@@ -1,4 +1,5 @@
 import type { AssetView, FileView, ImportRequest, ImportSettings, MediaCategory, MediaKind, SaveFormats } from "../api";
+import type { ImportProblem } from "../i18n";
 import { effectiveTemplate, joinPath, parseTemplate, renderFolders } from "./template";
 
 export const ALL_RATINGS = [0, 1, 2, 3, 4, 5] as const;
@@ -40,17 +41,20 @@ export interface ImportPlan {
   assetCount: number;
   bytes: number;
   /** Why the import cannot start, if it cannot. */
-  problems: string[];
+  problems: ImportProblem[];
 }
 
+/** Placeholder shown in example paths while no destination is set. */
+export const DESTINATION_PLACEHOLDER = "<destination>";
+
 export function planImport(assets: AssetView[], settings: ImportSettings, request: ImportRequest): ImportPlan {
-  const problems: string[] = [];
+  const problems: ImportProblem[] = [];
   const root = settings.destinationRoot?.trim() ?? "";
-  if (!root) problems.push("保存先フォルダが設定されていません（Import Settings）");
+  if (!root) problems.push({ code: "noDestination" });
   const parsed = parseTemplate(effectiveTemplate(settings.folders));
-  if (!parsed.ok) problems.push(`フォルダ構成が正しくありません: ${parsed.error}`);
-  if (request.ratings.length === 0) problems.push("評価が 1 つも選ばれていません");
-  if (request.media.length === 0) problems.push("メディア形式が 1 つも選ばれていません");
+  if (!parsed.ok) problems.push({ code: "badTemplate", error: parsed.error });
+  if (request.ratings.length === 0) problems.push({ code: "noRatings" });
+  if (request.media.length === 0) problems.push({ code: "noMedia" });
 
   const files: PlannedFile[] = [];
   let assetCount = 0;
@@ -63,9 +67,9 @@ export function planImport(assets: AssetView[], settings: ImportSettings, reques
       const folders = parsed.ok
         ? renderFolders(parsed.segments, { captureTime: asset.captureTime, stars: asset.rating ?? 0, kind: file.kind })
         : [];
-      files.push({ asset, file, destination: joinPath(root || "<保存先>", folders, file.name) });
+      files.push({ asset, file, destination: joinPath(root || DESTINATION_PLACEHOLDER, folders, file.name) });
     }
   }
-  if (problems.length === 0 && files.length === 0) problems.push("条件に一致するファイルがありません");
+  if (problems.length === 0 && files.length === 0) problems.push({ code: "nothingMatches" });
   return { files, assetCount, bytes, problems };
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { CloseIcon, DockIcon, FocusIcon, IconButton, ImportIcon, PopOutIcon, ShowIcon } from "../icons";
+import { Button, DialogTrigger } from "react-aria-components";
+import { IconButton } from "../controls";
+import { CloseIcon, DockIcon, FocusIcon, ImportIcon, PopOutIcon, ShowIcon } from "../icons";
 import { ImportDialog } from "../importing/ImportDialog";
 import { ImportProgressBar } from "../importing/ImportProgressBar";
 import { ImportSettingsPane } from "../importing/ImportSettingsPane";
@@ -9,11 +11,13 @@ import { createDockTracker } from "../windowing/docking";
 import { PANE_WINDOW_TITLES, type PaneWindow } from "../windowing/host";
 import { SplitView } from "../windowing/SplitView";
 import { useWorkspace } from "../windowing/Workspace";
+import { useI18n } from "../i18n";
 import { DeviceList } from "./DeviceList";
 import { PreviewPane } from "./PreviewPane";
 import { ThumbnailsPane } from "./ThumbnailsPane";
 import { useLibrary } from "./useLibrary";
 
+/** Pane names are interface labels: the same in every locale. */
 export const PANE_TITLE = PANE_WINDOW_TITLES;
 
 /** Panes stacked in the right column of the main window, top to bottom. */
@@ -59,13 +63,13 @@ export function PaneFrame({ kind, actions }: PaneFrameProps) {
  * window itself is dragged over this window and released.
  */
 export function Library() {
+  const { t } = useI18n();
   const { host, bus } = useWorkspace();
   const lib = useLibrary();
   const status = useImportStatus().data;
   const [docked, setDocked] = useState<PaneKind[]>([...PANE_KINDS]);
   const [externals, setExternals] = useState<Partial<Record<PaneKind, PaneWindow>>>({});
   const [hovering, setHovering] = useState<PaneKind | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const externalsRef = useRef(externals);
   useEffect(() => {
@@ -104,7 +108,8 @@ export function Library() {
       setExternals((prev) => ({ ...prev, [kind]: win }));
       setDocked((prev) => prev.filter((k) => k !== kind));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message === "popup-blocked" ? t.popupBlocked : message);
     }
   }
 
@@ -129,17 +134,17 @@ export function Library() {
     return (
       <>
         <IconButton
-          label={`${PANE_TITLE[kind]} を別ウィンドウで開く`}
-          title={last ? "最後のパネルは別ウィンドウにできません" : undefined}
+          label={t.popOut(PANE_TITLE[kind])}
+          tooltip={last ? t.lastPane : undefined}
           icon={<PopOutIcon />}
-          onClick={() => void popOut(kind)}
-          disabled={last}
+          onPress={() => void popOut(kind)}
+          isDisabled={last}
         />
         {!last && (
           <IconButton
-            label={`${PANE_TITLE[kind]} を閉じる`}
+            label={t.hidePane(PANE_TITLE[kind])}
             icon={<CloseIcon />}
-            onClick={() => setDocked((prev) => prev.filter((k) => k !== kind))}
+            onPress={() => setDocked((prev) => prev.filter((k) => k !== kind))}
           />
         )}
       </>
@@ -154,8 +159,8 @@ export function Library() {
       <SplitView
         direction="column"
         storageKey="seiton.split.right"
-        defaultRatio={55}
-        label="Preview と Import Settings の境界"
+        defaultRatio={38}
+        label={t.splitRight}
         first={frame(rightKinds[0]!)}
         second={frame(rightKinds[1]!)}
       />
@@ -168,35 +173,35 @@ export function Library() {
   return (
     <div className="library">
       <aside className="sidebar">
-        <h2>Devices</h2>
-        {lib.devices.isPending && <p>検出中…</p>}
-        {lib.devices.isError && <p role="alert">デバイスを取得できません: {String(lib.devices.error)}</p>}
+        <h2 className="index-heading">{t.devices}</h2>
+        {lib.devices.isPending && <p className="hint">{t.detecting}</p>}
+        {lib.devices.isError && <p role="alert">{t.devicesError(String(lib.devices.error))}</p>}
         {lib.devices.data && (
           <DeviceList devices={lib.devices.data} selectedId={lib.deviceId} onSelect={lib.selectDevice} />
         )}
 
-        <h2>Windows</h2>
-        <ul className="window-list" aria-label="Windows">
+        <h2 className="index-heading">{t.windows}</h2>
+        <ul className="window-list" aria-label={t.windows}>
           {PANE_KINDS.map((kind) => {
             const ext = externals[kind];
             const isDocked = docked.includes(kind);
-            const state = ext ? "別ウィンドウ" : isDocked ? "メインウィンドウ" : "非表示";
+            const state = ext ? t.windowState.external : isDocked ? t.windowState.docked : t.windowState.hidden;
             return (
               <li key={kind}>
                 <span className="window-name">{PANE_TITLE[kind]}</span>
                 <span className="window-status">{state}</span>
                 {ext && (
                   <>
-                    <IconButton label={`${PANE_TITLE[kind]} を前面に表示`} icon={<FocusIcon />} onClick={() => ext.focus()} />
+                    <IconButton label={t.focusWindow(PANE_TITLE[kind])} icon={<FocusIcon />} onPress={() => ext.focus()} />
                     <IconButton
-                      label={`${PANE_TITLE[kind]} をメインウィンドウに戻す`}
+                      label={t.dockWindow(PANE_TITLE[kind])}
                       icon={<DockIcon />}
-                      onClick={() => dockAndClose(kind)}
+                      onPress={() => dockAndClose(kind)}
                     />
                   </>
                 )}
                 {!ext && !isDocked && (
-                  <IconButton label={`${PANE_TITLE[kind]} を表示`} icon={<ShowIcon />} onClick={() => dock(kind)} />
+                  <IconButton label={t.showPane(PANE_TITLE[kind])} icon={<ShowIcon />} onPress={() => dock(kind)} />
                 )}
               </li>
             );
@@ -207,7 +212,7 @@ export function Library() {
 
       <div className="workspace">
         {left && right ? (
-          <SplitView storageKey="seiton.split.main" label="Thumbnails と右パネルの境界" first={left} second={right} />
+          <SplitView storageKey="seiton.split.main" label={t.splitMain} first={left} second={right} />
         ) : (
           (left ?? right)
         )}
@@ -215,25 +220,21 @@ export function Library() {
 
       <footer className="status-bar">
         <ImportProgressBar />
-        <button
-          type="button"
-          className="primary import-button"
-          onClick={() => setImportOpen(true)}
-          disabled={running || !lib.deviceId}
-          title={running ? "取り込みを実行中です" : undefined}
-        >
-          <ImportIcon />
-          取り込み
-        </button>
+        <DialogTrigger>
+          <Button className="primary import-button" isDisabled={running || !lib.deviceId}>
+            <ImportIcon />
+            {t.import}
+          </Button>
+          <ImportDialog />
+        </DialogTrigger>
       </footer>
 
       {hovering && externals[hovering] && (
         <div className="dock-overlay" role="status">
-          <p>離すと {PANE_TITLE[hovering]} をメインウィンドウに戻します</p>
+          <p>{t.dockOverlay(PANE_TITLE[hovering])}</p>
         </div>
       )}
 
-      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
@@ -244,6 +245,7 @@ export function Library() {
  * window and released.
  */
 export function PaneWindowLayout({ kind }: { kind: PaneKind }) {
+  const { t } = useI18n();
   const { host, bus } = useWorkspace();
   const lib = useLibrary();
   const [hovering, setHovering] = useState(false);
@@ -271,13 +273,13 @@ export function PaneWindowLayout({ kind }: { kind: PaneKind }) {
   return (
     <div className={`pane-window${hovering ? " docking" : ""}`}>
       <p className="pane-window-device">
-        {lib.device ? lib.device.label : "デバイス未選択"}
-        <span className="hint"> · ウィンドウをメインウィンドウの上へドラッグすると戻せます</span>
+        <span>{lib.device ? lib.device.label : t.noDevice}</span>
+        <span className="hint">{t.dockHint}</span>
       </p>
       <PaneFrame
         kind={kind}
         actions={
-          <IconButton label={`${PANE_TITLE[kind]} をメインウィンドウに戻す`} icon={<DockIcon />} onClick={dockBack} />
+          <IconButton label={t.dockWindow(PANE_TITLE[kind])} icon={<DockIcon />} onPress={dockBack} />
         }
       />
     </div>

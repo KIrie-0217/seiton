@@ -1,52 +1,75 @@
 import { useState } from "react";
+import { ProgressBar } from "react-aria-components";
+import { IconButton } from "../controls";
 import { formatSize } from "../format";
-import { CloseIcon, IconButton, StopIcon } from "../icons";
-import { useCancelImport, useImportStatus } from "./queries";
+import { useI18n } from "../i18n";
+import { CloseIcon, StopIcon } from "../icons";
+import { useLibrary } from "../library/useLibrary";
+import { useCancelImport, useImportSettings, useImportStatus } from "./queries";
 
 /** Import progress for the main window's status bar. */
 export function ImportProgressBar() {
+  const { t } = useI18n();
   const status = useImportStatus().data;
   const cancel = useCancelImport();
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const lib = useLibrary();
+  const destination = useImportSettings().data?.destinationRoot;
 
-  if (!status || dismissed === status.jobId) return <div className="import-progress" />;
+  if (!status || dismissed === status.jobId) {
+    // Idle: what is on the device and where it would go.
+    return (
+      <div className="import-progress">
+        {lib.device && (
+          <p className="idle-summary">
+            <span>{t.idleSummary(lib.all.length, lib.device.label)}</span>
+            <span aria-hidden="true">→</span>
+            {destination ? <code>{destination}</code> : <span>{t.noDestinationYet}</span>}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   const percent = status.bytesTotal > 0 ? Math.round((status.bytesDone / status.bytesTotal) * 100) : 100;
-  const counts = `${status.filesDone} / ${status.filesTotal} ファイル`;
   let text: string;
   switch (status.state) {
     case "running":
-      text = `取り込み中 ${counts}（${percent}%）${status.currentFile ? ` ${status.currentFile}` : ""}`;
+      text = t.progressRunning(status.filesDone, status.filesTotal, percent);
       break;
     case "completed":
-      text = `取り込み完了: ${status.filesDone} ファイル（${formatSize(status.bytesDone)}）`;
+      text = t.progressCompleted(status.filesDone, formatSize(status.bytesDone));
       break;
     case "cancelled":
-      text = `取り込みを中止しました（${counts}）`;
+      text = t.progressCancelled(status.filesDone, status.filesTotal);
       break;
     case "failed":
-      text = `取り込みに失敗しました: ${status.error ?? "不明なエラー"}`;
+      text = t.progressFailed(status.error ?? t.unknownError);
       break;
   }
 
   return (
-    <div className="import-progress" role="status" aria-label="取り込みの状況" aria-live="polite">
-      <progress
-        max={100}
-        value={percent}
-        aria-label="取り込みの進行状況"
-        className={`state-${status.state}`}
-      />
+    <div className="import-progress" role="status" aria-label={t.importStatus} aria-live="polite">
+      <ProgressBar className="progress" data-state={status.state} value={percent} aria-label={t.importProgress}>
+        {({ percentage }) => (
+          <div className="progress-track">
+            <div className="progress-fill" style={{ transform: `scaleX(${(percentage ?? 0) / 100})` }} />
+          </div>
+        )}
+      </ProgressBar>
       <span className="import-progress-text">{text}</span>
+      {status.state === "running" && status.currentFile && (
+        <span className="import-progress-file">{status.currentFile}</span>
+      )}
       {status.state === "running" ? (
         <IconButton
-          label="取り込みを中止"
+          label={t.cancelImport}
           icon={<StopIcon />}
-          onClick={() => cancel.mutate(status.jobId)}
-          disabled={cancel.isPending}
+          onPress={() => cancel.mutate(status.jobId)}
+          isDisabled={cancel.isPending}
         />
       ) : (
-        <IconButton label="表示を消す" icon={<CloseIcon />} onClick={() => setDismissed(status.jobId)} />
+        <IconButton label={t.dismiss} icon={<CloseIcon />} onPress={() => setDismissed(status.jobId)} />
       )}
     </div>
   );

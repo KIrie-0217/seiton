@@ -1,0 +1,143 @@
+{
+  "title": "seiton の見た目の方向性を選ぶ",
+  "question": "明るくシンプル、AI っぽさなし、という条件で 1 案を選んでください（取り消して別の組み合わせを出すこともできます）。",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Camera Menu Page",
+      "kicker": "THE ROLL",
+      "lineage": "カメラ本体のメニュー画面（タブ付きページ、項目と値の行、選択行のハイライト）",
+      "thesis": "取り込み設定をカメラのメニューのように読ませる：タブ、項目 / 値の行、選択中の 1 行だけが強調される。",
+      "palette": ["#fafaf8", "#1d2126", "#e3e6ea", "#c2410c"],
+      "materials": ["tabbed menu pages", "item / value rows", "solid selection bar"],
+      "viewport": "白い地にサムネイル一覧。右の Import Settings は番号付きタブの下に「項目 ── 値」の行が並ぶメニューページ。取り込みボタンと保存先の表示だけがアクセント色。",
+      "risk": "字組みと余白が弱いと、古いカメラの設定画面のように野暮ったく見える。",
+      "raised": [
+        { "from": "challenger-seven-segment", "raise": "未設定・無効・空の状態も意図して描く（ゴースト表示）。灰色でぼかしておくだけにしない。" },
+        { "from": "challenger-one-bit", "raise": "選択は淡い色付けではなく、インクの反転（塗りつぶし）で示す。" },
+        { "from": "challenger-orienteering", "raise": "アクセント色は「ファイルの行き先」（保存先パス、取り込み操作）専用にする。" },
+        { "from": "challenger-alphabet-storm", "raise": "書体は 1 ファミリーだけ。大きさと太さの段差で階層を作る。" }
+      ],
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "Devices / Windows", "x": 0, "y": 0, "w": 2, "h": 9 },
+          { "label": "Thumbnails", "x": 2, "y": 0, "w": 6, "h": 9 },
+          { "label": "Preview", "x": 8, "y": 0, "w": 4, "h": 4 },
+          { "label": "Import Settings (menu tabs + rows)", "x": 8, "y": 4, "w": 4, "h": 5, "accent": true },
+          { "label": "progress · Import", "x": 0, "y": 9, "w": 12, "h": 1 }
+        ]
+      }
+    },
+    {
+      "id": "model-pick",
+      "label": "Contact Sheet",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "フィルムのコンタクトシート（ベタ焼き）とダーマトグラフの印",
+      "thesis": "一覧をベタ焼きのように並べ、コマ番号を振り、選別の印だけに色を使う。",
+      "palette": ["#ffffff", "#161616", "#e7e7e3", "#d7261e"],
+      "materials": ["contact print", "frame numbers", "grease-pencil marks"],
+      "viewport": "白い地にコマ番号付きのサムネイルが整然と並び、星と選択は赤い印のように描かれる。設定は印刷物の注文票のような表組み。",
+      "risk": "写真ツールの多くが行き着く方向でもあり、フィルムの比喩がノスタルジーに寄りやすい。",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "Devices", "x": 0, "y": 0, "w": 2, "h": 9 },
+          { "label": "Contact sheet (numbered frames)", "x": 2, "y": 0, "w": 7, "h": 9, "accent": true },
+          { "label": "Preview / Settings", "x": 9, "y": 0, "w": 3, "h": 9 },
+          { "label": "status bar", "x": 0, "y": 9, "w": 12, "h": 1 }
+        ]
+      }
+    },
+    {
+      "id": "challenger-seven-segment",
+      "label": "Top-LCD Counters",
+      "verdict": "competitive",
+      "lineage": "7 セグメント表示（カメラ上面の液晶、時計、スコアボード）",
+      "thesis": "件数・残り容量・進捗を、固定セルのセグメント数字で示す。",
+      "palette": ["#141414", "#e03c31", "#3a3a3a", "#f5f5f5"],
+      "materials": ["segment digits", "ghost cells"],
+      "viewport": "ステータスバーと取り込みダイアログの件数・容量が、カメラ上面の液晶のような固定桁の数字になる。",
+      "case": "カメラの液晶は写真を撮る人に馴染みがある（利用者の共感で互角）。ただしフォームやフォルダ構成の分かりやすさでは劣る。",
+      "risk": "暗い地に LED の色、という本来の姿は「明るくシンプル」の指定と衝突する。"
+    },
+    {
+      "id": "challenger-one-bit",
+      "label": "One-bit Desktop",
+      "verdict": "declined",
+      "lineage": "初期の白黒デスクトップ（ディザ、ウィンドウの枠、点線の選択）",
+      "thesis": "白黒の画素とディザだけで全ての階調を描く。",
+      "palette": ["#ffffff", "#000000"],
+      "materials": ["ordered dither", "1px window chrome"],
+      "viewport": "重なるウィンドウと点線の選択範囲。",
+      "case": "取り込みの利用者も内容の分かりやすさも引き寄せない。",
+      "kept": "選択は反転（塗りつぶし）で示す、という状態表現の明快さ。",
+      "risk": "レトロの仮装になる。"
+    },
+    {
+      "id": "challenger-orienteering",
+      "label": "Orienteering Map",
+      "verdict": "declined",
+      "lineage": "オリエンテーリング地図と凡例",
+      "thesis": "固定の地形の上に、紫のコースだけが乗る。",
+      "palette": ["#ffffff", "#c9a227", "#8b5a2b", "#b0228c"],
+      "materials": ["contour lines", "course overprint"],
+      "viewport": "地図の上に番号付きのコース。",
+      "case": "取り込みの道筋という比喩は立つが、利用者はこの地図を日常的に見ていない。",
+      "kept": "予約色：1 色を「進む先」だけに使い、それ以外には使わない規律。",
+      "risk": "比喩の説明が必要になる。"
+    },
+    {
+      "id": "challenger-alphabet-storm",
+      "label": "Alphabet Storm",
+      "verdict": "declined",
+      "lineage": "文字が天気になる空想の風景",
+      "thesis": "文字そのものが素材として動く。",
+      "palette": ["#ffffff", "#111111", "#b8bcc2"],
+      "materials": ["monumental grotesk", "letter particles"],
+      "viewport": "白地に大きな文字の塊。",
+      "case": "作業の道具として両方の軸で劣る。",
+      "kept": "1 つの書体に全ての役割を持たせる、書体の規律。",
+      "risk": "作業を妨げる。"
+    },
+    {
+      "id": "challenger-deep-dive",
+      "label": "Mesophotic Dive",
+      "verdict": "declined",
+      "lineage": "深い潜水と潜水コンピュータの数字",
+      "thesis": "1 本の深さの軸が全てを支配する。",
+      "palette": ["#0b2a4a", "#e8f1f5", "#3fd0e0"],
+      "materials": ["depth axis", "marine snow"],
+      "viewport": "縦の深度の軸に沿った内容。",
+      "case": "暗い色調で指定と衝突し、利用者の世界からも遠い。",
+      "kept": "1 本の並び順（撮影時刻）が全ての一覧を貫く、という軸の一貫性。",
+      "risk": "暗い画面になる。"
+    },
+    {
+      "id": "challenger-racing",
+      "label": "Racing League",
+      "verdict": "declined",
+      "lineage": "架空のレーシングチームのロゴとデカール",
+      "thesis": "選択した項目がチームカラーで満たされる。",
+      "palette": ["#ff6a13", "#d4ff00", "#3b3f45", "#ffffff"],
+      "materials": ["decals", "extended caps"],
+      "viewport": "左から右へ流れるレイアウト。",
+      "case": "取り込みツールの落ち着きと合わない。",
+      "kept": "状態を区切り付きのカウンタで読ませる明快さ。",
+      "risk": "騒がしい。"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "canon": true,
+  "canonCard": {
+    "label": "Windows 11 standard (light)",
+    "thesis": "Windows 11 の標準的な明るいアプリを、そのまま丁寧に作る。",
+    "palette": ["#f3f3f3", "#ffffff", "#1a1a1a", "#005fb8"],
+    "materials": ["Fluent controls", "system font"],
+    "viewport": "ナビゲーション、一覧、詳細の 3 列。標準のボタンとフォームで、いつもの Windows アプリの見た目。",
+    "risk": "他のアプリと見分けがつかない（それが狙いでもある）。"
+  },
+  "steer": true
+}

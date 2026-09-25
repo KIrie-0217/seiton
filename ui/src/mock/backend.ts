@@ -2,6 +2,7 @@ import type { AppInfo, AssetView, ImportProgress, ImportRequest, ImportSettings,
 import { setBackendOverride } from "../api";
 import { planImport } from "../importing/plan";
 import { DEFAULT_IMPORT_SETTINGS } from "../importing/template";
+import { MESSAGES } from "../i18n";
 import type { BusMessage } from "../windowing/bus";
 import { createMockData, placeholderThumbnail, type MockData } from "./data";
 
@@ -195,11 +196,11 @@ export function createMockHandler(options: MockOptions = {}) {
         return next;
       }
       case "start_import": {
-        if (job?.progress.state === "running") throw new Error("取り込みはすでに実行中です");
+        if (job?.progress.state === "running") throw new Error(MESSAGES.en.problem({ code: "running" }));
         const request = args.request as ImportRequest;
         sync();
         const plan = planImport(data.assets.get(request.deviceId) ?? [], getSettings(), request);
-        if (plan.problems.length > 0) throw new Error(plan.problems.join("\n"));
+        if (plan.problems.length > 0) throw new Error(plan.problems.map((p) => MESSAGES.en.problem(p)).join("\n"));
         jobCounter += 1;
         const current = {
           cancelled: false,

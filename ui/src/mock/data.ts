@@ -138,20 +138,29 @@ export function createMockData(): MockData {
   return { devices, assets };
 }
 
-/** A placeholder thumbnail: an SVG with a per-asset color and the file name. */
+/**
+ * A placeholder thumbnail for mock data: a quiet grayscale "print" whose tone
+ * and horizon vary per asset, marked MOCK so it is never mistaken for a
+ * real photo.
+ */
 export function placeholderThumbnail(asset: AssetView): string {
-  let hash = 0;
-  for (const ch of asset.id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
-  const hue = hash % 360;
+  let hash = 2166136261;
+  for (const ch of asset.id) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const tone = 150 + (hash % 70); // sky lightness 150–219
+  const ground = tone - 60 - ((hash >>> 8) % 30);
+  const horizon = 120 + ((hash >>> 16) % 70);
+  const peak = 40 + ((hash >>> 4) % 240);
   const isVideo = asset.files.some((f) => f.kind === "video");
-  const icon = isVideo
-    ? `<polygon points="138,95 138,145 180,120" fill="white" fill-opacity="0.85"/>`
-    : `<circle cx="210" cy="60" r="22" fill="white" fill-opacity="0.6"/><polygon points="0,240 110,110 190,200 240,150 320,240" fill="black" fill-opacity="0.25"/>`;
+  const gray = (v: number) => `rgb(${v},${v},${v})`;
+  const video = isVideo
+    ? `<circle cx="160" cy="${horizon - 20}" r="26" fill="rgba(255,255,255,0.85)"/><polygon points="152,${horizon - 34} 152,${horizon - 6} 175,${horizon - 20}" fill="${gray(ground - 20)}"/>`
+    : "";
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="hsl(${hue} 55% 55%)"/><stop offset="1" stop-color="hsl(${(hue + 40) % 360} 55% 30%)"/>` +
-    `</linearGradient></defs><rect width="320" height="240" fill="url(#g)"/>${icon}` +
-    `<text x="12" y="228" font-family="sans-serif" font-size="18" fill="white">${asset.name}</text></svg>`;
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 213">` +
+    `<rect width="320" height="213" fill="${gray(tone)}"/>` +
+    `<polygon points="0,213 0,${horizon} ${peak},${horizon - 70} ${peak + 90},${horizon - 10} 320,${horizon - 40} 320,213" fill="${gray(ground)}"/>` +
+    `<rect y="${horizon + 30}" width="320" height="${213 - horizon}" fill="${gray(ground - 25)}"/>` +
+    video +
+    `<text x="308" y="203" text-anchor="end" font-family="sans-serif" font-size="11" letter-spacing="1" fill="rgba(255,255,255,0.8)">MOCK</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
