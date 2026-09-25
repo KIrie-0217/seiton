@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, DialogTrigger } from "react-aria-components";
 import { IconButton } from "../controls";
-import { CloseIcon, DockIcon, FocusIcon, ImportIcon, PopOutIcon, ShowIcon } from "../icons";
+import { CloseIcon, DockIcon, FocusIcon, ImportIcon, PopOutIcon, ShowIcon, SidebarIcon } from "../icons";
 import { ImportDialog } from "../importing/ImportDialog";
 import { ImportProgressBar } from "../importing/ImportProgressBar";
 import { ImportSettingsPane } from "../importing/ImportSettingsPane";
@@ -19,6 +19,24 @@ import { useLibrary } from "./useLibrary";
 
 /** Pane names are interface labels: the same in every locale. */
 export const PANE_TITLE = PANE_WINDOW_TITLES;
+
+const SIDEBAR_KEY = "seiton.sidebar.open";
+
+function loadSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function saveSidebarOpen(open: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, String(open));
+  } catch {
+    // The choice just isn't remembered.
+  }
+}
 
 /** Panes stacked in the right column of the main window, top to bottom. */
 const RIGHT_COLUMN: PaneKind[] = ["preview", "import"];
@@ -71,6 +89,25 @@ export function Library() {
   const [externals, setExternals] = useState<Partial<Record<PaneKind, PaneWindow>>>({});
   const [hovering, setHovering] = useState<PaneKind | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen);
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((open) => {
+      saveSidebarOpen(!open);
+      return !open;
+    });
+  }, []);
+
+  // Ctrl/⌘+B toggles the sidebar, as in most desktop apps.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleSidebar]);
   const externalsRef = useRef(externals);
   useEffect(() => {
     externalsRef.current = externals;
@@ -171,8 +208,8 @@ export function Library() {
   const running = status?.state === "running";
 
   return (
-    <div className="library">
-      <aside className="sidebar">
+    <div className="library" data-sidebar={sidebarOpen ? "open" : "closed"}>
+      <aside className="sidebar" id="library-sidebar" hidden={!sidebarOpen}>
         <h2 className="index-heading">{t.devices}</h2>
         {lib.devices.isPending && <p className="hint">{t.detecting}</p>}
         {lib.devices.isError && <p role="alert">{t.devicesError(String(lib.devices.error))}</p>}
@@ -219,6 +256,14 @@ export function Library() {
       </div>
 
       <footer className="status-bar">
+        <IconButton
+          label={sidebarOpen ? t.hideSidebar : t.showSidebar}
+          tooltip={`${sidebarOpen ? t.hideSidebar : t.showSidebar} (Ctrl+B)`}
+          icon={<SidebarIcon />}
+          onPress={toggleSidebar}
+          aria-controls="library-sidebar"
+          aria-expanded={sidebarOpen}
+        />
         <ImportProgressBar />
         <DialogTrigger>
           <Button className="primary import-button" isDisabled={running || !lib.deviceId}>

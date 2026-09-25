@@ -56,6 +56,8 @@ const labels = {
   splitMain: "Resize Thumbnails and side panes",
   splitRight: "Resize Preview and Import Settings",
   splitDefault: "Resize panes",
+  hideSidebar: "Hide sidebar",
+  showSidebar: "Show sidebar",
   // thumbnails
   filter: "Filter",
   rating: "Rating",

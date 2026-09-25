@@ -1,5 +1,7 @@
 # seiton アーキテクチャ設計書
 
+> 日本語版です。正は英語版の [docs/architecture.md](../architecture.md) です。
+
 ## 1. 目的
 
 カメラ（USB 直結の MTP/PTP、または SD カードリーダー）内の写真・動画を、プレビューを見ながら星評価などのメタデータで整理し、条件ルールに従ってローカルの任意のフォルダ構成へ取り込む。
@@ -75,7 +77,7 @@
 | ExifTool は `-stay_open` で常駐 | ファイルごとの起動コストを避ける。MTP の場合は読み込んだ先頭バイトを stdin で渡す |
 | 拡張は本体組み込み（Cargo feature）+ TOML の実行時ロード | Rust に安定 ABI がないため動的プラグインは不採用。他者の拡張を受け付ける必要が出たら WASM を検討する |
 | メーカー SDK は DLL のみ `libloading` で実行時ロード | SDK の配布条件により同梱できない場合に備える。DLL がなくても EXIF で動く |
-| UI は React + TypeScript | TanStack Virtual / Query、React Aria などの周辺ライブラリと情報量 |
+| UI は React + TypeScript + React Aria Components | 周辺ライブラリと情報量。部品は React Aria（見た目を持たないヘッドレスな部品）で、振る舞い・キーボード操作・アクセシビリティ・多言語対応を任せ、見た目は自前の CSS で決める |
 
 ## 4. 全体構成
 
@@ -362,21 +364,25 @@ flowchart LR
 ## 9. UI
 
 - 画像は独自 URL（`thumb://<assetId>?s=256`）で読み込む。処理側でキャッシュ → スケジューラの順に取得する。
-- サムネイル一覧は TanStack Virtual の仮想スクロール（実カードは数千件を想定）。
-- 表示範囲は `IntersectionObserver` で検知して `set_viewport` を呼ぶ。WebView 側の画像読み込み中断はプロトコル処理側に伝わらないことがあるため、キャンセルは `set_viewport` で行う。
+- サムネイル一覧は React Aria の `GridList` + `Virtualizer`（`GridLayout`）で仮想化する（実カードは数千件を想定）。
+- 表示範囲は Virtualizer の表示範囲（または `IntersectionObserver`）から求めて `set_viewport` を呼ぶ。WebView 側の画像読み込み中断はプロトコル処理側に伝わらないことがあるため、キャンセルは `set_viewport` で行う。
 - UI ⇔ Rust の DTO は Rust 側で定義し、ts-rs または specta で TypeScript 型を生成する。
 - 開発用に `@tauri-apps/api/mocks`（`mockIPC`）でモックデータを返すモードを持つ（`VITE_USE_MOCK`）。
-- キーボード操作とアクセシビリティ（React Aria など）に対応する。
+- キーボード操作とアクセシビリティは React Aria Components に任せる。
 
 実装メモ（Task 3）:
 
 - DTO（`src-tauri/src/dto.rs`）: `DeviceView`、`AssetView`、`FileView`、`RatingUpdate`、`RatingSource`、`TransportView`、`FolderScan`、`GroupView`。`MediaKind` は `seiton-core` の `ts` feature で生成する。`u64` は ts-rs の既定では `bigint` になるため `number` を指定している。
 - コマンド（UI 側 `ui/src/api.ts`）: `list_devices`、`list_assets(deviceId)`、`set_rating(update)`、`get_thumbnail(assetId)`。現時点ではモックバックエンド（`ui/src/mock/`）のみが実装しており、Rust 側の実装は Task 4〜7 で追加する。それまで通常起動（`npm run tauri dev`）では Task 2 のフォルダ一覧を表示する。
-- 一覧は ARIA grid パターン（roving tabindex）。矢印・Home/End・PageUp/PageDown で移動、Space で選択の追加/解除、0〜5 で評価（0 は解除）、Ctrl/⌘+クリックで追加選択。
+- 一覧は React Aria の `GridList`（`layout="grid"`、`selectionBehavior="replace"`）。矢印・Home/End・PageUp/PageDown での移動、クリック／Ctrl/⌘+クリック／Shift+クリック／Space／Ctrl+A での選択は React Aria が担う。seiton は 0〜5 での評価（0 は解除）だけを追加している。
 - 一覧のセルの星はクリックで変更できる（そのセルだけが対象。選択は変えない。現在の評価の星をもう一度押すと解除）。星はゲージ表示で、ポインタを★3 に合わせると★1〜★3 が点灯する（Preview の評価も同じ）。星のボタンは Tab の移動対象にしない（キーボードではフォーカス中のセルに 0〜5 で評価する）。
 - 評価 0 と未設定（`null`）はどちらも「未評価」として扱う。
-- 部品ライブラリは入れず、ネイティブ要素（radio、checkbox、select）で実装した。複雑な部品が必要になった時点で React Aria を検討する。
+- 部品は React Aria Components を使う（`Button`、`Select`、`CheckboxGroup` / `Checkbox`、`RadioGroup`、`ListBox`、`ModalOverlay` / `Modal` / `Dialog`、`ProgressBar`、`TextField`、`Tooltip`、`GridList` / `Virtualizer`）。共通の薄いラッパーは `ui/src/controls.tsx`。React Aria にない分割の境界（`SplitView`）だけは自前（WAI-ARIA window splitter）。
+- React Aria の Checkbox / Radio は見えない `<input>` を絶対配置で持つため、ラベル側を `position: relative` にしている（これがないとクリック時にウィンドウ全体がスクロールする。E2E テストで検査）。
 - サムネイルは TanStack Query でメモリ上にキャッシュする（Task 6/7 で `thumb://` とディスクキャッシュに置き換える）。
+- 多言語対応（`ui/src/i18n.tsx`）: ラベル（見出し、ボタン、項目名、選択肢、パネル名）はどの言語でも英語。補足（ヒント、説明、空の状態、エラー、状況の文）は言語設定に従い、英語か日本語。ヘッダーの Language で切り替え、`localStorage` に保存する。初期値はシステムの言語（日本語なら `ja`）。`?lang=ja` で指定もできる（確認用）。React Aria 自身の文言と数値・日付の書式も同じ言語に合わせる（`I18nProvider`）。
+- 見た目のデザイン: `PRODUCT.md`（製品の前提）と `.impeccable/surfaces/ui-src.md`（方向性の契約）を参照。impeccable スキル（`.kiro/skills/impeccable/`）で選んだ「明るいライトテーブルの上のコンタクトシート」。色は白い紙・灰色の台・黒に近いインク、赤は印（星、選択、取り込みボタン）だけに使う。
+- テスト: Vitest + Testing Library（jsdom、`ui/src/**/*.test.tsx`）と、Playwright の E2E（実際の Chromium、`e2e/`、§9.3）。
 
 ### 9.1 分割表示と複数ウィンドウ（Task 3.1）
 
@@ -390,9 +396,9 @@ flowchart LR
 
 - 各パネルはアプリ内に 1 つだけ存在し、状態は「メインウィンドウ」「別ウィンドウ」「非表示」のいずれか。同じ種類のウィンドウを複数開く機能は持たない（混乱を避けるため）。外部ウィンドウのラベルは種類ごとに固定（`pane-thumbnails` / `pane-preview` / `pane-import`）で、すでに開いていれば前面に出すだけにする。
 - メインウィンドウのレイアウト（位置は固定）:
-  - 左: Devices と Windows（各パネルの状態と操作）
+  - 左: Devices と Windows（各パネルの状態と操作）。サイドバーはステータスバー左端のボタンか Ctrl/⌘+B で隠せる。選んだ状態は保存し、隠すとパネルがその幅を使う
   - 中央: 左列に Thumbnails、右列に Preview（上）と Import Settings（下）を縦に分割。どちらかが別ウィンドウ・非表示なら、残った方が右列全体を使う
-  - 下: ステータスバー（左に取り込みの進行状況、右に「取り込み」ボタン）
+  - 下: ステータスバー（左にサイドバーの切り替えと取り込みの進行状況、右に Import ボタン）
   - 境界はドラッグと矢印キーで調整でき（WAI-ARIA window splitter）、比率は分割ごとに保存する
 - パネル右上のアイコン: 別ウィンドウで開く／閉じる（非表示）。メインに残る最後のパネルは移動・非表示にできない。アイコンボタンには `aria-label` とツールチップを付ける。
 - 外部ウィンドウをメインに戻す方法:
@@ -448,6 +454,14 @@ Import Settings パネルで既定の設定を編集し、ステータスバー�
 - 進行状況: ステータスバー左に進捗バー、ファイル数、割合、処理中のファイル名。実行中は中止ボタン、完了・中止後は表示を消すボタン。完了すると取り込んだアセットに「取込済」バッジが付く。
 - コマンド（モックのみ実装、Rust は Task 9〜10）: `get_import_settings`、`set_import_settings`、`start_import(request)`、`cancel_import(jobId)`、`get_import_status`。
 - 取り込み計画の計算（どのファイルをどこへコピーするか）とテンプレートは、モック段階では TypeScript で実装している。Task 9 で Rust（`seiton-core`）に移し、画面は計画プレビュー用のコマンドを呼ぶ形にする（二重実装にしない）。
+
+### 9.3 E2E テスト（Playwright）
+
+- `npm run e2e` で、ブラウザのモック（`npm run dev:mock`、ポート 1430）を Playwright が起動し、実際の Chromium で検査する。jsdom では分からない配置・フォーカス・スクロールを確認できる。
+- `?mock=fast` でモックの遅延をなくしている。
+- 対象: 一覧・選択・評価、絞り込み、言語、取り込みダイアログと進行状況、別ウィンドウ（ブラウザのポップアップ）、クリックでウィンドウがスクロールしないこと。
+- 本物の Tauri アプリは対象外（macOS の WKWebView は Playwright で操作できない）。Windows では WebView2 のデバッグポート経由で `connectOverCDP` する方法を Task 11〜12 で検討する。
+- AI エージェントからは Playwright MCP（`.kiro/settings/mcp.json`）で画面を操作・観察できる。使い方は `AGENTS.md`。
 
 ## 10. 事前検証（Spike）
 

@@ -570,6 +570,19 @@ button {
   height: 100%;
 }
 
+.library[data-sidebar="closed"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "workspace" "status";
+}
+
+.library[data-sidebar="closed"] > .workspace {
+  padding-left: var(--s3);
+}
+
+.library > .sidebar[hidden] {
+  display: none;
+}
+
 .library > .sidebar {
   grid-area: index;
   overflow: auto;
@@ -1233,9 +1246,9 @@ button {
   grid-area: status;
   display: flex;
   align-items: center;
-  gap: var(--s4);
+  gap: var(--s3);
   height: 52px;
-  padding: 0 var(--s3) 0 var(--s4);
+  padding: 0 var(--s3);
   border-top: 1px solid var(--rule);
   background: var(--sheet);
 }

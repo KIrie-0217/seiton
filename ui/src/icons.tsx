@@ -104,6 +104,14 @@ export const ClearIcon = () => (
   </Svg>
 );
 
+/** Window with a left column: show or hide the sidebar. */
+export const SidebarIcon = () => (
+  <Svg>
+    <rect x="2" y="3" width="12" height="10" rx="1" />
+    <path d="M6 3v10" />
+  </Svg>
+);
+
 export const ChevronIcon = () => (
   <Svg>
     <path d="M4.5 6.5 8 10l3.5-3.5" />

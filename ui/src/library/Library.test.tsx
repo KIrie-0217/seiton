@@ -140,6 +140,19 @@ describe("Library (mock backend)", () => {
     expect(within(main).getByText("No frames match the filter.")).toBeInTheDocument();
   });
 
+  it("hides and shows the sidebar, and remembers the choice", async () => {
+    const { user, main } = await setup();
+    const toggle = within(main).getByRole("button", { name: "Hide sidebar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle);
+    expect(within(main).queryByRole("listbox", { name: "Devices" })).not.toBeInTheDocument();
+    expect(within(main).getByRole("button", { name: "Show sidebar" })).toHaveAttribute("aria-expanded", "false");
+    expect(localStorage.getItem("seiton.sidebar.open")).toBe("false");
+
+    await user.keyboard("{Control>}b{/Control}");
+    expect(within(main).getByRole("listbox", { name: "Devices" })).toBeInTheDocument();
+  });
+
   it("switches supplementary text to Japanese and keeps English labels", async () => {
     const { user, main } = await setup();
     await chooseOption(user, main, "Language", "日本語");

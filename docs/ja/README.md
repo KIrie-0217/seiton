@@ -1,8 +1,10 @@
 # seiton
 
+> 日本語版です。正は英語版の [README.md](../../README.md) です。
+
 カメラ内の写真・動画を、プレビューを見ながら星評価で「整頓」し、ルールに従ってローカルへ取り込むデスクトップアプリです。
 
-> Status: 開発初期。進捗は [docs/plan.md](docs/plan.md) を参照。
+> Status: 開発初期。進捗は [docs/plan.md](plan.md) を参照。
 
 ## 主な機能（予定）
 
@@ -38,7 +40,10 @@ npm test              # フロントエンドのテスト（Vitest）
 npm run lint          # ESLint
 cargo test --workspace   # Rust のテスト（ui/src/bindings の TypeScript 型も再生成）
 cargo clippy --workspace --all-targets -- -D warnings
+npm run e2e           # Playwright の E2E テスト（初回は npm run e2e:install）
 ```
+
+AI エージェント向けの手順は [AGENTS.md](../../AGENTS.md) を参照。
 
 UI と Rust の間でやり取りする型は `src-tauri/src/dto.rs` で定義し、`cargo test` で `ui/src/bindings/` に TypeScript 型を生成します（ts-rs）。生成結果はコミットしてください（CI で差分を検査します）。
 
@@ -50,9 +55,9 @@ UI と Rust の間でやり取りする型は `src-tauri/src/dto.rs` で定義�
 
 ## ドキュメント
 
-- [設計書 (docs/architecture.md)](docs/architecture.md)
-- [実装計画 (docs/plan.md)](docs/plan.md)
+- [設計書 (architecture.md)](architecture.md)
+- [実装計画 (plan.md)](plan.md)
 
 ## ライセンス
 
-[MIT](LICENSE)
+[MIT](../../LICENSE)

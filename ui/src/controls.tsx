@@ -28,13 +28,15 @@ interface IconButtonProps {
   isDisabled?: boolean;
   /** Tooltip text when it should differ from the label (e.g. why it is disabled). */
   tooltip?: string;
+  "aria-controls"?: string;
+  "aria-expanded"?: boolean;
 }
 
 /** Square icon button with a tooltip. */
-export function IconButton({ label, icon, onPress, isDisabled, tooltip }: IconButtonProps) {
+export function IconButton({ label, icon, onPress, isDisabled, tooltip, ...aria }: IconButtonProps) {
   return (
     <TooltipTrigger delay={500} closeDelay={0}>
-      <Button className="icon-button" aria-label={label} onPress={onPress} isDisabled={isDisabled}>
+      <Button className="icon-button" aria-label={label} onPress={onPress} isDisabled={isDisabled} {...aria}>
         {icon}
       </Button>
       <Tooltip className="tooltip" offset={6}>

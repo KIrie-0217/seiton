@@ -1,5 +1,7 @@
 # seiton 実装計画
 
+> 日本語版です。正は英語版の [docs/plan.md](../plan.md) です。
+
 設計の詳細は [architecture.md](architecture.md) を参照。各タスクは完了時にビルドとテストが通る状態にする。
 
 | # | タスク | 状態 |
@@ -9,6 +11,7 @@
 | 2 | 接続抽象化と SD カード読み取り、プロファイル、分類 | 完了 |
 | 3 | モックデータでの UI 作成 | 完了 |
 | 3.1 | 分割表示・複数ウィンドウ・取り込み設定（モック段階） | 完了 |
+| 3.2 | デザインの刷新（impeccable）、React Aria への移行、日英対応、E2E テスト | 完了（DESIGN.md とデザインレビューの残りは未完了） |
 | 4 | ExifTool によるメタデータ読み取り | 未着手 |
 | 5 | カタログ（SQLite）と評価同期 | 未着手 |
 | 6 | IO スケジューラとキャッシュ | 未着手 |
@@ -71,6 +74,19 @@
   - スケジューラの `set_viewport` をウィンドウ単位に変更する設計を反映（実装は Task 6）
 - テスト: 分割境界（左右・上下）、レイアウト、パネルの移動と復帰、種類ごとに 1 ウィンドウ、ウィンドウのドラッグによる結合（結合する／隣に置くだけでは結合しない／開いた直後は結合しない）、非表示と再表示、ウィンドウ間の同期、星のクリックとゲージ表示、テンプレートの展開と検証、保存形式の判定、取り込み計画、ダイアログの「全て」の連動と開始条件、取り込みの実行・完了・中止。
 - デモ: `npm run tauri:mock` で、Preview を別ウィンドウに出して戻す（ウィンドウをメインの上へドラッグ）。Import Settings で保存先とフォルダ構成を設定し、「取り込み」から開始すると、ステータスバーに進捗が表示され、完了後に取込済バッジが付く。
+
+## Task 3.2: デザインの刷新、React Aria、日英対応、E2E テスト
+
+- 目的: 明るくシンプルで AI らしさのない見た目にし、自前の部品を UI ライブラリに置き換え、日英に対応し、実際のブラウザでの E2E テストを用意する。
+- 内容:
+  - impeccable スキルを `.kiro/skills/impeccable/` に追加。`PRODUCT.md` を作成し、方向性（コンタクトシート）を `.impeccable/surfaces/ui-src.md` に記録
+  - 部品を React Aria Components に置き換え（一覧は `GridList` + `Virtualizer`）。TanStack Virtual は削除
+  - 多言語対応（ラベルは英語、補足は英語または日本語。Language で切り替え）
+  - Playwright の E2E（`e2e/`、`npm run e2e`、CI の Windows ジョブ）と Playwright MCP（`.kiro/settings/mcp.json`）
+  - `AGENTS.md` にエージェント向けの手順をまとめ、日本語の文書を `docs/ja/` に移して英語を正にする
+  - サイドバーを隠せるようにする（ボタンと Ctrl/⌘+B）
+- 残り: デザインレビューの指摘（Import Settings が一部画面外、一覧の密度、Preview の切れ、未選択時の Preview）と `DESIGN.md` の作成
+- テスト: Vitest 70 件、Playwright 13 件。
 
 ## Task 4: ExifTool によるメタデータ読み取り
 
