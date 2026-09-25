@@ -6,11 +6,13 @@ import react from "@vitejs/plugin-react";
 // https://v2.tauri.app/start/frontend/vite/
 const host = process.env.TAURI_DEV_HOST;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: "ui",
   plugins: [react()],
   clearScreen: false,
   envPrefix: ["VITE_", "TAURI_ENV_"],
+  // `vite --mode mock` (npm run dev:mock) enables the in-memory backend.
+  define: mode === "mock" ? { "import.meta.env.VITE_USE_MOCK": JSON.stringify("true") } : {},
   server: {
     port: 1420,
     strictPort: true,
@@ -29,4 +31,4 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
   },
-});
+}));

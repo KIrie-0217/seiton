@@ -8,8 +8,13 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# Derive TypeScript bindings (ts-rs) for types shared with the UI.
+ts = ["dep:ts-rs"]
+
 [dependencies]
 serde = { workspace = true }
+ts-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

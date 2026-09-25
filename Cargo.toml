@@ -38,6 +38,7 @@ thiserror = "=2.0.21"
 toml = "=1.1.6"
 globset = "=0.4.20"
 tempfile = "=3.27.0"
+ts-rs = "=12.0.1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

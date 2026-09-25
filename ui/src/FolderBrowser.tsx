@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { scanFolder, type FolderScan, type MediaKind } from "./api";
+import { formatSize } from "./format";
 
 const KIND_LABEL: Record<MediaKind, string> = {
   raw: "RAW",
@@ -9,18 +10,6 @@ const KIND_LABEL: Record<MediaKind, string> = {
   video: "動画",
   sidecar: "XMP",
 };
-
-export function formatSize(bytes: number | null): string {
-  if (bytes === null) return "-";
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
-}
 
 type State =
   | { status: "idle" }

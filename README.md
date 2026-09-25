@@ -32,11 +32,14 @@
 ```sh
 npm ci
 npm run tauri dev     # アプリを起動
+npm run dev:mock      # モックデータでブラウザ上に画面を表示（http://localhost:1420）
 npm test              # フロントエンドのテスト（Vitest）
 npm run lint          # ESLint
-cargo test --workspace
+cargo test --workspace   # Rust のテスト（ui/src/bindings の TypeScript 型も再生成）
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+UI と Rust の間でやり取りする型は `src-tauri/src/dto.rs` で定義し、`cargo test` で `ui/src/bindings/` に TypeScript 型を生成します（ts-rs）。生成結果はコミットしてください（CI で差分を検査します）。
 
 構成:
 

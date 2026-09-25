@@ -1,0 +1,2 @@
+# Generated bindings are compared in CI; keep them LF on every platform.
+ui/src/bindings/** text eol=lf

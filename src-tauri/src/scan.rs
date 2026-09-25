@@ -3,39 +3,11 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use seiton_core::MediaKind;
 use seiton_device_api::DeviceSource;
 use seiton_device_fs::FsSource;
 use seiton_profiles::{CameraProfile, MediaGroup, Probe, resolve, scan};
-use serde::Serialize;
 
-/// Result of scanning a folder.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FolderScan {
-    pub source_label: String,
-    pub profile_id: String,
-    pub profile_name: String,
-    pub groups: Vec<GroupView>,
-}
-
-/// One shot: its files (RAW, JPEG, ...).
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GroupView {
-    pub key: String,
-    pub name: String,
-    pub files: Vec<FileView>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileView {
-    pub name: String,
-    pub path: String,
-    pub kind: MediaKind,
-    pub size: Option<u64>,
-}
+pub use crate::dto::{FileView, FolderScan, GroupView};
 
 impl From<MediaGroup> for GroupView {
     fn from(g: MediaGroup) -> Self {
@@ -76,6 +48,7 @@ pub fn scan_folder(root: &Path, profiles: &[Arc<dyn CameraProfile>]) -> Result<F
 #[cfg(test)]
 mod tests {
     use super::*;
+    use seiton_core::MediaKind;
     use seiton_profiles::ProfileRegistry;
     use std::fs;
 

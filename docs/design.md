@@ -365,6 +365,15 @@ flowchart LR
 - 開発用に `@tauri-apps/api/mocks`（`mockIPC`）でモックデータを返すモードを持つ（`VITE_USE_MOCK`）。
 - キーボード操作とアクセシビリティ（React Aria など）に対応する。
 
+実装メモ（Task 3）:
+
+- DTO（`src-tauri/src/dto.rs`）: `DeviceView`、`AssetView`、`FileView`、`RatingUpdate`、`RatingSource`、`TransportView`、`FolderScan`、`GroupView`。`MediaKind` は `seiton-core` の `ts` feature で生成する。`u64` は ts-rs の既定では `bigint` になるため `number` を指定している。
+- コマンド（UI 側 `ui/src/api.ts`）: `list_devices`、`list_assets(deviceId)`、`set_rating(update)`、`get_thumbnail(assetId)`。現時点ではモックバックエンド（`ui/src/mock/`）のみが実装しており、Rust 側の実装は Task 4〜7 で追加する。それまで通常起動（`npm run tauri dev`）では Task 2 のフォルダ一覧を表示する。
+- 一覧は ARIA grid パターン（roving tabindex）。矢印・Home/End・PageUp/PageDown で移動、Space で選択の追加/解除、0〜5 で評価（0 は解除）、Ctrl/⌘+クリックで追加選択。
+- 評価 0 と未設定（`null`）はどちらも「未評価」として扱う。
+- 部品ライブラリは入れず、ネイティブ要素（radio、checkbox、select）で実装した。複雑な部品が必要になった時点で React Aria を検討する。
+- サムネイルは TanStack Query でメモリ上にキャッシュする（Task 6/7 で `thumb://` とディスクキャッシュに置き換える）。
+
 ## 10. 事前検証（Spike）
 
 該当タスクの冒頭で実施し、結果をこの節に追記する。

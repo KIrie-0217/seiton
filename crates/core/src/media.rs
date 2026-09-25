@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// The role of a file within an asset (a shot).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "lowercase")]
 pub enum MediaKind {
     Raw,

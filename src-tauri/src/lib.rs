@@ -1,6 +1,7 @@
 //! Tauri shell: wires providers together and exposes commands to the UI.
 
 pub mod commands;
+pub mod dto;
 pub mod scan;
 mod state;
 

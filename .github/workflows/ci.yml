@@ -43,3 +43,12 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      # `cargo test` regenerates ui/src/bindings via ts-rs; they must be committed.
+      - name: Check TypeScript bindings are up to date
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain -- ui/src/bindings)" ]; then
+            git status --porcelain -- ui/src/bindings
+            echo "::error::ui/src/bindings is stale. Run 'cargo test --workspace' and commit the result."
+            exit 1
+          fi

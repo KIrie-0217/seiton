@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { FolderBrowser, formatSize } from "./FolderBrowser";
+import { FolderBrowser } from "./FolderBrowser";
 import type { FolderScan } from "./api";
 
 const SCAN: FolderScan = {
@@ -75,14 +75,5 @@ describe("FolderBrowser", () => {
     await userEvent.click(screen.getByRole("button", { name: "フォルダを選択…" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("not found: /Volumes/X");
-  });
-});
-
-describe("formatSize", () => {
-  it("formats bytes with binary units", () => {
-    expect(formatSize(null)).toBe("-");
-    expect(formatSize(512)).toBe("512 B");
-    expect(formatSize(1536)).toBe("1.5 KB");
-    expect(formatSize(28311552)).toBe("27.0 MB");
   });
 });
