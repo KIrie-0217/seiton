@@ -1,0 +1,44 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "src-tauri"]
+default-members = ["crates/*", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/KIrie-0217/seiton"
+publish = false
+
+[workspace.dependencies]
+# internal crates
+seiton-core = { path = "crates/core" }
+seiton-catalog = { path = "crates/catalog" }
+seiton-device-api = { path = "crates/device-api" }
+seiton-device-fs = { path = "crates/device-fs" }
+seiton-device-mtp = { path = "crates/device-mtp" }
+seiton-profiles = { path = "crates/profiles" }
+seiton-metadata-api = { path = "crates/metadata-api" }
+seiton-metadata-exiftool = { path = "crates/metadata-exiftool" }
+seiton-scheduler = { path = "crates/scheduler" }
+seiton-cache = { path = "crates/cache" }
+seiton-transfer = { path = "crates/transfer" }
+
+# external crates (pinned)
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+tauri = { version = "=2.11.6", features = [] }
+tauri-build = { version = "=2.6.3", features = [] }
+tauri-plugin-opener = "=2.5.5"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

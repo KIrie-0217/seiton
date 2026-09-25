@@ -2,7 +2,7 @@
 
 カメラ内の写真・動画を、プレビューを見ながら星評価で「整頓」し、ルールに従ってローカルへ取り込むデスクトップアプリです。
 
-> Status: 設計段階（実装前）。現在は設計書と実装計画のみを含みます。
+> Status: 開発初期。進捗は [docs/plan.md](docs/plan.md) を参照。
 
 ## 主な機能（予定）
 
@@ -24,6 +24,25 @@
 - [Tauri 2](https://tauri.app/) + Rust（cargo workspace）
 - React + TypeScript（Vite）
 - SQLite（カタログ）、[ExifTool](https://exiftool.org/)（メタデータ）
+
+## 開発
+
+必要なもの: Rust（stable）、Node.js 24（`.nvmrc`）、各 OS の [Tauri の前提条件](https://v2.tauri.app/start/prerequisites/)
+
+```sh
+npm ci
+npm run tauri dev     # アプリを起動
+npm test              # フロントエンドのテスト（Vitest）
+npm run lint          # ESLint
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+構成:
+
+- `crates/` Rust のライブラリ群（設計書 §4.2）
+- `src-tauri/` Tauri アプリ本体
+- `ui/` React + TypeScript のフロントエンド
 
 ## ドキュメント
 
