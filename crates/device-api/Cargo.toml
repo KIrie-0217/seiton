@@ -8,7 +8,14 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# In-memory DeviceSource for tests in this and downstream crates.
+fake = []
+
 [dependencies]
+bitflags = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

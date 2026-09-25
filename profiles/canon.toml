@@ -1,0 +1,26 @@
+# Canon EOS / PowerShot.
+#
+# Folder layout and rating tags are based on documentation and must be
+# confirmed with real cards (docs/design.md §10, Task 4).
+schema_version = 1
+id = "canon"
+name = "Canon"
+extends = "generic-dcf"
+
+[match]
+usb_vendor_id = [0x04A9]
+exif_make = ["Canon"]
+# e.g. DCIM/100CANON, DCIM/100EOSR6; DCIM/CANONMSC holds camera settings.
+folder_signature = ["DCIM/*CANON", "DCIM/*EOS*", "DCIM/CANONMSC"]
+
+[layout]
+ignore = ["DCIM/CANONMSC", "DCIM/CANONMSC/**"]
+
+[kinds]
+raw = ["CR3", "CR2", "CRW"]
+heif = ["HIF"]
+jpeg = ["JPG"]
+video = ["MP4", "MOV", "CRM"]
+
+[metadata]
+rating_tags = ["XMP:Rating", "Canon:Rating", "EXIF:Rating"]

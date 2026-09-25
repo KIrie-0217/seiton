@@ -1,16 +1,23 @@
-//! Device abstraction: DeviceWatcher, DeviceSource and capabilities.
+//! Device abstraction shared by every connection method.
 //!
-//! See `docs/design.md` for the overall architecture.
+//! A [`DeviceSource`] hides whether files come from an SD card (mass
+//! storage), MTP/PTP or a vendor SDK. Differences between them are expressed
+//! as [`SourceCaps`] instead of branching on the transport. Sources are
+//! read-only by design: seiton never writes to the camera or card.
+//!
+//! See `docs/design.md` §4–5.
 
-/// Name of this crate, used by the app to report which components are built in.
-pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
+mod path;
+mod source;
+mod walk;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[cfg(any(test, feature = "fake"))]
+pub mod fake;
 
-    #[test]
-    fn crate_name_matches_package() {
-        assert_eq!(CRATE_NAME, "seiton-device-api");
-    }
-}
+pub use bytes::Bytes;
+pub use path::{PathError, VPath};
+pub use source::{
+    DeviceEvent, DeviceId, DeviceInfo, DeviceSource, Entry, EntryKind, ObjRef, Result, SourceCaps,
+    SourceError, Transport,
+};
+pub use walk::walk;

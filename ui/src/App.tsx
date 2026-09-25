@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAppInfo, type AppInfo } from "./api";
+import { FolderBrowser } from "./FolderBrowser";
 
 type State =
   | { status: "loading" }
@@ -31,6 +32,7 @@ export function App() {
         {state.status === "ready" && `${state.info.name} v${state.info.version}`}
         {state.status === "error" && `エラー: ${state.message}`}
       </p>
+      <FolderBrowser />
     </main>
   );
 }
