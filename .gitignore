@@ -1,0 +1,38 @@
+# Rust
+/target/
+**/target/
+**/*.rs.bk
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/WixTools/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test fixtures that must not be committed (large or private camera files)
+fixtures/private/
