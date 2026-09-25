@@ -17,7 +17,12 @@ if (useMock) {
   const host = createDefaultHost();
   const bus = isTauri() ? createTauriBus(host.windowId) : createBroadcastBus(host.windowId);
   const { installMockBackend } = await import("./mock/backend");
-  installMockBackend({ publish: (msg) => bus.publish(msg) });
+  // `?mock=fast` removes simulated latency (used by the Playwright E2E tests).
+  const fast = new URLSearchParams(location.search).get("mock") === "fast";
+  installMockBackend({
+    publish: (msg) => bus.publish(msg),
+    ...(fast ? { listDelayMs: 0, thumbDelayMs: [0, 0] as [number, number], copyDelayMs: { perFile: 5, perMb: 0 } } : {}),
+  });
   library = { host, bus, pane: paneFromLocation(location.search) };
 }
 

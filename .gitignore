@@ -41,3 +41,10 @@ fixtures/private/
 .impeccable/review/
 .impeccable/questions/
 .impeccable/config.local.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/.playwright-mcp/
